@@ -50,14 +50,20 @@ jobs:
           sudo chown "$(whoami)" /Users/Shared
           cp -R "$GITHUB_WORKSPACE" /Users/Shared/telegram-ios
 
+      # Дисковый кэш Bazel: скомпилированные модули переиспользуются между сборками,
+      # пересобирается только то, что поменялось. Ключ уникален для каждого запуска,
+      # чтобы кэш обновлялся; восстанавливается самый свежий.
       - name: Cache Bazel
         uses: actions/cache@v4
         with:
           path: |
             /Users/Shared/telegram-ios/build-input
+            /Users/Shared/bazel-disk-cache
             /private/var/tmp/_bazel_containerhost/cache
-          key: bazel-${{ runner.os }}-${{ hashFiles('versions.json', 'MODULE.bazel.lock') }}
-          restore-keys: bazel-${{ runner.os }}-
+          key: bazel-${{ runner.os }}-${{ hashFiles('versions.json') }}-${{ github.run_id }}
+          restore-keys: |
+            bazel-${{ runner.os }}-${{ hashFiles('versions.json') }}-
+            bazel-${{ runner.os }}-
 
       - name: Generate build configuration
         # api_id / api_hash берутся из секретов репозитория (Settings → Secrets → Actions).
@@ -100,6 +106,7 @@ jobs:
           python3 -u build-system/Make/Make.py \
             --overrideXcodeVersion \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
+            --cacheDir=/Users/Shared/bazel-disk-cache \
             build \
             --configurationPath="build-system/ci-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
