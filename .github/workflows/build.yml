@@ -88,6 +88,37 @@ jobs:
           json.dump(cfg, open('build-system/ci-configuration.json', 'w'), indent=2)
           EOF
 
+      # Фейковые профили из репозитория Swiftgram истекли (2026-10-30), а rules_apple
+      # проверяет ExpirationDate. Подпись профиля при сборке не проверяется (-noverify),
+      # поэтому продлеваем даты и переподписываем тем же фейковым сертификатом.
+      - name: Refresh fake provisioning profiles
+        run: |
+          set -euo pipefail
+          cd /Users/Shared/telegram-ios/build-system/fake-codesigning
+          P12=certs/SelfSigned.p12
+          openssl pkcs12 -in "$P12" -passin pass: -nodes -out "$RUNNER_TEMP/fake.pem" 2>/dev/null \
+            || openssl pkcs12 -legacy -in "$P12" -passin pass: -nodes -out "$RUNNER_TEMP/fake.pem"
+          for p in profiles/*.mobileprovision; do
+            security cms -D -i "$p" -o "$RUNNER_TEMP/profile.plist"
+            python3 - "$RUNNER_TEMP/profile.plist" <<'EOF'
+          import datetime, plistlib, sys
+          path = sys.argv[1]
+          with open(path, 'rb') as f:
+              d = plistlib.load(f)
+          now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None, microsecond=0)
+          d['CreationDate'] = now - datetime.timedelta(days=1)
+          d['ExpirationDate'] = now + datetime.timedelta(days=3650)
+          d['TimeToLive'] = 3650
+          with open(path, 'wb') as f:
+              plistlib.dump(d, f)
+          print(path, d.get('Name'), '->', d['ExpirationDate'])
+          EOF
+            openssl smime -sign -binary -nodetach -outform der \
+              -signer "$RUNNER_TEMP/fake.pem" -inkey "$RUNNER_TEMP/fake.pem" \
+              -in "$RUNNER_TEMP/profile.plist" -out "$p"
+            security cms -D -i "$p" | plutil -extract ExpirationDate raw -o - -
+          done
+
       - name: Build the App
         run: |
           set -x
@@ -115,7 +146,8 @@ jobs:
 
           OUTPUT_PATH="$SOURCE_DIR/build/artifacts"
           rm -rf "$OUTPUT_PATH"; mkdir -p "$OUTPUT_PATH" build/DSYMs
-          for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa; do
+          ls bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/ || true
+          for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/*.ipa; do
             cp "$f" "$OUTPUT_PATH/Swiftgram.ipa"
           done
           for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/*.dSYM; do
