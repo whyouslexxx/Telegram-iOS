@@ -59,6 +59,29 @@ jobs:
           key: bazel-${{ runner.os }}-${{ hashFiles('versions.json', 'MODULE.bazel.lock') }}
           restore-keys: bazel-${{ runner.os }}-
 
+      - name: Generate build configuration
+        # api_id / api_hash берутся из секретов репозитория (Settings → Secrets → Actions).
+        # Без секретов используются публичные тестовые значения из appstore-configuration.json.
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          TG_BUNDLE_ID: ${{ vars.TG_BUNDLE_ID }}
+          TG_TEAM_ID: ${{ vars.TG_TEAM_ID }}
+        run: |
+          cd /Users/Shared/telegram-ios
+          python3 - <<'EOF'
+          import json, os
+          src = 'build-system/appstore-configuration.json'
+          cfg = json.load(open(src))
+          cfg.setdefault('sg_config', '{}')
+          for key, env in [('api_id', 'TG_API_ID'), ('api_hash', 'TG_API_HASH'),
+                           ('bundle_id', 'TG_BUNDLE_ID'), ('team_id', 'TG_TEAM_ID')]:
+              if os.environ.get(env):
+                  cfg[key] = os.environ[env]
+                  print(f'{key}: from {env}')
+          json.dump(cfg, open('build-system/ci-configuration.json', 'w'), indent=2)
+          EOF
+
       - name: Build the App
         run: |
           set -x
@@ -78,7 +101,7 @@ jobs:
             --overrideXcodeVersion \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             build \
-            --configurationPath="build-system/appstore-configuration.json" \
+            --configurationPath="build-system/ci-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 \
             --buildNumber="$BUILD_NUMBER"
