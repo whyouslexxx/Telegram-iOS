@@ -297,10 +297,6 @@ public extension TelegramEngine {
         }
 
         public func installInteractiveReadMessagesAction(peerId: PeerId, threadId: Int64?) -> Disposable {
-            // MARK: Whygram
-            if WGSettings.shared.ghostNoRead {
-                return EmptyDisposable
-            }
             return _internal_installInteractiveReadMessagesAction(postbox: self.account.postbox, stateManager: self.account.stateManager, peerId: peerId, threadId: threadId)
         }
         

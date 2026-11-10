@@ -886,6 +886,7 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
     // «Читать при взаимодействии»: отправка сообщения отмечает чат прочитанным.
     if !account.isSupportUser && WGSettings.shared.ghostReadOnInteract && peerId.namespace != Namespaces.Peer.SecretChat {
         if let index = transaction.getTopPeerMessageIndex(peerId: peerId, namespace: Namespaces.Message.Cloud) {
+            WGSettings.shared.allowReadPush(peerId: peerId.toInt64())
             _internal_applyMaxReadIndexInteractively(transaction: transaction, stateManager: account.stateManager, index: index)
         }
     }

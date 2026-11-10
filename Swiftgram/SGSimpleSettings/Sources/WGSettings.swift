@@ -45,6 +45,7 @@ public final class WGSettings {
     private static let globalFiltersKey = "wg_globalFilters"
     private static let chatFiltersKey = "wg_chatFilters"
     private static let blockedPeerIdsKey = "wg_blockedPeerIds"
+    private static let readExceptionsKey = "wg_readExceptions"
 
     private let defaults = UserDefaults.standard
     private let lock = NSLock()
@@ -54,6 +55,8 @@ public final class WGSettings {
     private var chatFiltersValue: [String: [String]] = [:]
     private var blockedPeerIdsValue: Set<Int64> = []
     private var matcherCache: [String: WGFilterMatcher] = [:]
+    private var readExceptionsValue: Set<Int64> = []
+    private var allowedReadPushes: [Int64: Double] = [:]
 
     private init() {
         for key in Key.allCases {
@@ -68,6 +71,9 @@ public final class WGSettings {
         self.chatFiltersValue = (self.defaults.dictionary(forKey: WGSettings.chatFiltersKey) as? [String: [String]]) ?? [:]
         if let stored = self.defaults.array(forKey: WGSettings.blockedPeerIdsKey) as? [NSNumber] {
             self.blockedPeerIdsValue = Set(stored.map { $0.int64Value })
+        }
+        if let stored = self.defaults.array(forKey: WGSettings.readExceptionsKey) as? [NSNumber] {
+            self.readExceptionsValue = Set(stored.map { $0.int64Value })
         }
     }
 
@@ -107,6 +113,69 @@ public final class WGSettings {
     public var saveFromBots: Bool { return self.bool(.saveFromBots) }
     public var noAds: Bool { return self.bool(.noAds) }
     public var bypassCopyProtection: Bool { return self.bool(.bypassCopyProtection) }
+
+    // MARK: Отметки о прочтении
+
+    /// Чаты-исключения: в них отметки о прочтении отправляются как обычно.
+    public var readExceptions: [Int64] {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        return self.readExceptionsValue.sorted()
+    }
+
+    public func isReadException(_ peerId: Int64) -> Bool {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        return self.readExceptionsValue.contains(peerId)
+    }
+
+    public func setReadException(_ peerId: Int64, _ value: Bool) {
+        self.lock.lock()
+        if value {
+            self.readExceptionsValue.insert(peerId)
+        } else {
+            self.readExceptionsValue.remove(peerId)
+        }
+        let snapshot = self.readExceptionsValue
+        self.lock.unlock()
+        self.defaults.set(snapshot.map { NSNumber(value: $0) }, forKey: WGSettings.readExceptionsKey)
+    }
+
+    /// Действует ли «не читать» в этом чате.
+    public func ghostNoRead(peerId: Int64) -> Bool {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        guard (self.boolValues[.ghostMode] ?? false) && (self.boolValues[.ghostNoRead] ?? false) else {
+            return false
+        }
+        return !self.readExceptionsValue.contains(peerId)
+    }
+
+    /// Пользователь сам отметил чат прочитанным: ближайшую отправку отметки на сервер не блокируем.
+    public func allowReadPush(peerId: Int64) {
+        self.lock.lock()
+        self.allowedReadPushes[peerId] = Date().timeIntervalSince1970 + 60.0
+        self.lock.unlock()
+    }
+
+    /// Нужно ли оставить отметку о прочтении только на этом устройстве.
+    public func shouldKeepReadLocal(peerId: Int64) -> Bool {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        guard (self.boolValues[.ghostMode] ?? false) && (self.boolValues[.ghostNoRead] ?? false) else {
+            return false
+        }
+        if self.readExceptionsValue.contains(peerId) {
+            return false
+        }
+        if let expiration = self.allowedReadPushes[peerId] {
+            if expiration > Date().timeIntervalSince1970 {
+                return false
+            }
+            self.allowedReadPushes.removeValue(forKey: peerId)
+        }
+        return true
+    }
 
     // MARK: Фильтры
 

@@ -44,6 +44,17 @@ func wgAppendContextMenuActions(actions: inout [ContextMenuItem], sgActions: ino
         })))
     }
 
+    let chatPeerId = message.id.peerId.toInt64()
+    if WGSettings.shared.ghostNoRead && message.id.peerId != context.account.peerId {
+        let isException = WGSettings.shared.isReadException(chatPeerId)
+        sgActions.append(.action(ContextMenuActionItem(text: wgString(isException ? "ContextMenu.ReadException.Remove" : "ContextMenu.ReadException.Add", lang), icon: { theme in
+            return generateTintedImage(image: UIImage(bundleImageName: isException ? "WGEyeOff" : "WGGhost"), color: theme.actionSheet.primaryTextColor)
+        }, action: { _, f in
+            WGSettings.shared.setReadException(chatPeerId, !isException)
+            f(.default)
+        })))
+    }
+
     if !message.text.isEmpty && message.flags.contains(.Incoming) {
         sgActions.append(.action(ContextMenuActionItem(text: wgString("ContextMenu.AddFilter", lang), icon: { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "WGFilterAdd"), color: theme.actionSheet.primaryTextColor)

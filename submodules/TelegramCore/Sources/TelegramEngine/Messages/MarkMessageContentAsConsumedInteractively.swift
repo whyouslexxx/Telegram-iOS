@@ -9,7 +9,7 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
         if let message = transaction.getMessage(messageId), message.flags.contains(.Incoming) {
             // MARK: Whygram
             // В режиме призрака не сообщаем о прослушивании. Исчезающие медиа это не затрагивает.
-            if WGSettings.shared.ghostNoRead && !message.attributes.contains(where: { $0 is AutoremoveTimeoutMessageAttribute }) {
+            if WGSettings.shared.ghostNoRead(peerId: messageId.peerId.toInt64()) && !message.attributes.contains(where: { $0 is AutoremoveTimeoutMessageAttribute }) {
                 return
             }
             var updateMessage = false

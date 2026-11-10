@@ -2,6 +2,7 @@ import Foundation
 import Postbox
 internal import TelegramApi
 import SwiftSignalKit
+import SGSimpleSettings // MARK: Whygram
 
 
 func _internal_applyMaxReadIndexInteractively(postbox: Postbox, stateManager: AccountStateManager, index: MessageIndex) -> Signal<Void, NoError> {
@@ -266,6 +267,7 @@ func _internal_markForumThreadAsReadInteractively(transaction: Transaction, netw
 }
 
 func _internal_togglePeerUnreadMarkInteractively(transaction: Transaction, network: Network, viewTracker: AccountViewTracker, peerId: PeerId, setToValue: Bool? = nil) {
+    WGSettings.shared.allowReadPush(peerId: peerId.toInt64()) // MARK: Whygram
     guard let peer = transaction.getPeer(peerId) else {
         return
     }

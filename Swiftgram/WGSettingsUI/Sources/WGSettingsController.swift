@@ -217,14 +217,57 @@ public func wgSettingsController(context: AccountContext) -> ViewController {
 
 private func wgGhostController(context: AccountContext) -> ViewController {
     let refresh = WGRefresh()
+    let chatTitles = Atomic<[Int64: String]>(value: [:])
+    var presentImpl: ((ViewController, Any?) -> Void)?
+
     let arguments = WGArguments(setBool: { key, value in
         wgSetBool(key, value)
         refresh.trigger()
+    }, open: { key in
+        guard key.hasPrefix("e:"), let peerId = Int64(key.dropFirst(2)) else {
+            return
+        }
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: wgString("Common.Delete", presentationData.strings.baseLanguageCode), color: .destructive, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                    WGSettings.shared.setReadException(peerId, false)
+                    refresh.trigger()
+                })
+            ]),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                })
+            ])
+        ])
+        presentImpl?(actionSheet, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
     })
-    return wgListController(context: context, title: { wgString("Main.Ghost", $0) }, refresh: refresh, arguments: arguments, entries: { presentationData in
+
+    let exceptionIds = WGSettings.shared.readExceptions
+    if !exceptionIds.isEmpty {
+        let _ = (context.account.postbox.transaction { transaction -> [Int64: String] in
+            var result: [Int64: String] = [:]
+            for peerId in exceptionIds {
+                if let peer = transaction.getPeer(PeerId(peerId)) {
+                    result[peerId] = peer.debugDisplayTitle
+                }
+            }
+            return result
+        }
+        |> deliverOnMainQueue).start(next: { titles in
+            let _ = chatTitles.swap(titles)
+            refresh.trigger()
+        })
+    }
+
+    let controller = wgListController(context: context, title: { wgString("Main.Ghost", $0) }, refresh: refresh, arguments: arguments, entries: { presentationData in
         let lang = presentationData.strings.baseLanguageCode
         let settings = WGSettings.shared
         let master = settings.bool(.ghostMode)
+        let titles = chatTitles.with { $0 }
 
         var entries: [WGEntry] = []
         entries.append(wgToggle(1, 0, .ghostMode, "Ghost.Enable", lang))
@@ -244,8 +287,20 @@ private func wgGhostController(context: AccountContext) -> ViewController {
         entries.append(.notice(id: 24, section: 2, text: wgString("Ghost.SendScheduled.Notice", lang)))
 
         entries.append(.toggle(id: 30, section: 3, key: "warnOnStoriesOpen", title: wgString("Ghost.StoryWarn", lang), value: SGSimpleSettings.shared.warnOnStoriesOpen, enabled: true))
+
+        entries.append(.header(id: 40, section: 4, text: wgString("Ghost.Exceptions.Header", lang)))
+        var nextId = 41
+        for peerId in settings.readExceptions {
+            entries.append(.text(id: nextId, section: 4, key: "e:\(peerId)", text: titles[peerId] ?? "\(peerId)"))
+            nextId += 1
+        }
+        entries.append(.notice(id: 4000, section: 4, text: wgString("Ghost.Exceptions.Notice", lang)))
         return entries
     })
+    presentImpl = { [weak controller] c, a in
+        controller?.present(c, in: .window(.root), with: a)
+    }
+    return controller
 }
 
 // MARK: - Сохранение
