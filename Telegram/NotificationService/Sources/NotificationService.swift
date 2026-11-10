@@ -855,13 +855,19 @@ private final class NotificationServiceHandler {
 
         let appGroupName = "group.\(baseAppBundleId)"
         try! PasscodeEnvironment.shared.configure(PasscodeConfiguration(appGroupIdentifier: appGroupName, processRole: .appExtension))
-        let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
+        let maybeAppGroupUrl = sgAppGroupBaseURL()
 
         guard let appGroupUrl = maybeAppGroupUrl else {
             return nil
         }
 
         let rootPath = rootPathForBasePath(appGroupUrl.path)
+
+        // The main app publishes migration atomically and creates the database
+        // key. An early push must not initialize a competing empty database.
+        guard FileManager.default.fileExists(atPath: rootPath + "/.tempkey") else {
+            return nil
+        }
 
         TempBox.initializeShared(basePath: rootPath, processType: "notification", launchSpecificId: Int64.random(in: Int64.min ... Int64.max))
 

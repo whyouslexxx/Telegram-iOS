@@ -1,3 +1,4 @@
+import SGAppGroupIdentifier
 import Foundation
 import PasscodeCore
 import Intents
@@ -147,7 +148,7 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
         
         let appGroupName = "group.\(baseAppBundleId)"
         try! PasscodeEnvironment.shared.configure(PasscodeConfiguration(appGroupIdentifier: appGroupName, processRole: .appExtension))
-        let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
+        let maybeAppGroupUrl = sgAppGroupBaseURL()
         
         guard let appGroupUrl = maybeAppGroupUrl else {
             return
@@ -986,8 +987,7 @@ private final class WidgetIntentHandler {
         
         let baseAppBundleId = String(appBundleIdentifier[..<lastDotRange.lowerBound])
         
-        let appGroupName = "group.\(baseAppBundleId)"
-        let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
+        let maybeAppGroupUrl = sgAppGroupBaseURL()
         
         guard let appGroupUrl = maybeAppGroupUrl else {
             return

@@ -330,11 +330,10 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             return existingSession
         }
         
-        let baseAppBundleId = Bundle.main.bundleIdentifier!
-        let appGroupName = "group.\(baseAppBundleId)"
-
         let configuration = URLSessionConfiguration.background(withIdentifier: identifier)
-        configuration.sharedContainerIdentifier = appGroupName
+        if sgAppGroupBaseURL() != nil {
+            configuration.sharedContainerIdentifier = sgAppGroupIdentifier()
+        }
         configuration.isDiscretionary = false
         let session = URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
         self.urlSessions.append(session)
@@ -595,8 +594,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         })
         // Re-signing services may remove App Groups. Keep the main app usable in
         // its private container; extensions still require a valid shared group.
-        let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
-            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.appendingPathComponent("WhygramStandalone", isDirectory: true)
+        let standaloneAppGroupUrl = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.appendingPathComponent("WhygramStandalone", isDirectory: true)
+        let sharedAppGroupUrl = sgAppGroupBaseURL()
+        let maybeAppGroupUrl = sharedAppGroupUrl ?? standaloneAppGroupUrl
         
         let buildConfig = BuildConfig(baseAppBundleId: baseAppBundleId)
         self.buildConfig = buildConfig
@@ -720,6 +720,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             return true
         }
         do {
+            if let source = standaloneAppGroupUrl, let destination = sharedAppGroupUrl {
+                try sgMigrateStandaloneStorage(from: source, to: destination)
+            }
             try FileManager.default.createDirectory(at: appGroupUrl, withIntermediateDirectories: true, attributes: nil)
         } catch {
             let alert = UIAlertController(title: "Whygram", message: "Unable to open application storage: \(error.localizedDescription)", preferredStyle: .alert)
@@ -757,6 +760,16 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             performAppGroupUpgrades(appGroupPath: appGroupUrl.path, rootPath: rootPath)
         }
         
+        // Persist the encryption key only after the destination exists. The
+        // legacy upgrade helper creates it asynchronously.
+        do {
+            try FileManager.default.createDirectory(atPath: rootPath, withIntermediateDirectories: true, attributes: nil)
+        } catch {
+            let alert = UIAlertController(title: "Whygram", message: "Unable to prepare database storage: \(error.localizedDescription)", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            self.mainWindow?.presentNative(alert)
+            return true
+        }
         let deviceSpecificEncryptionParameters = BuildConfig.deviceSpecificEncryptionParameters(rootPath, baseAppBundleId: baseAppBundleId)
         let encryptionParameters = ValueBoxEncryptionParameters(forceEncryptionIfNoSet: false, key: ValueBoxEncryptionParameters.Key(data: deviceSpecificEncryptionParameters.key)!, salt: ValueBoxEncryptionParameters.Salt(data: deviceSpecificEncryptionParameters.salt)!)
         

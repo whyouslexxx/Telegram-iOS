@@ -1,3 +1,4 @@
+import SGAppGroupIdentifier
 import UIKit
 import PasscodeCore
 import UserNotifications
@@ -27,7 +28,7 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
             
             let appGroupName = "group.\(baseAppBundleId)"
             try! PasscodeEnvironment.shared.configure(PasscodeConfiguration(appGroupIdentifier: appGroupName, processRole: .appExtension))
-            let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
+            let maybeAppGroupUrl = sgAppGroupBaseURL()
             
             guard let appGroupUrl = maybeAppGroupUrl else {
                 return

@@ -43,6 +43,14 @@ jobs:
           sudo xcode-select -s "$XCODE/Contents/Developer"
           xcodebuild -version
 
+      - name: Check Whygram signing and storage migration
+        run: |
+          set -euo pipefail
+          xcrun swiftc -o "$RUNNER_TEMP/whygram-storage-tests" \
+            Swiftgram/SGAppGroupIdentifier/Sources/*.swift \
+            Tests/WhygramStorage/main.swift
+          "$RUNNER_TEMP/whygram-storage-tests"
+
       - name: Create canonical source directory
         run: |
           set -x

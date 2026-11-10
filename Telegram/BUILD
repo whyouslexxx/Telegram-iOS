@@ -1121,6 +1121,7 @@ swift_library(
     deps = [
         "//submodules/TelegramUI",
         "//submodules/PasscodeCore",
+        "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier",
         "//submodules/TelegramUI/Components/ShareExtensionContext"
     ],
 )
@@ -1223,6 +1224,7 @@ swift_library(
     deps = [
         "//submodules/TelegramUI:TelegramUI",
         "//submodules/PasscodeCore",
+        "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier",
         ":NotificationContentExtensionLink",
     ],
 )
@@ -1329,6 +1331,7 @@ swift_library(
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/PasscodeCore",
+        "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier",
         "//submodules/OpenSSLEncryptionProvider:OpenSSLEncryptionProvider",
         "//Telegram:GeneratedSources",
     ],
@@ -1472,6 +1475,7 @@ swift_library(
         "//submodules/OpenSSLEncryptionProvider:OpenSSLEncryptionProvider",
         "//submodules/AppLockState:AppLockState",
         "//submodules/PasscodeCore",
+        "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier",
         "//Telegram:GeneratedSources",
         "//submodules/WidgetItems:WidgetItems",
     ],
@@ -1738,6 +1742,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier",
         "//submodules/TelegramUI:TelegramUI",
         "//submodules/TelegramVoip:TelegramVoip",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
