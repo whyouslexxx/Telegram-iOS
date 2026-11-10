@@ -39,6 +39,7 @@ public final class WGSettings {
         case fakePhone
         case fakeUsername
         case fakeStars
+        case previousAccount
     }
 
     private static let enabledByDefault: Set<Key> = [

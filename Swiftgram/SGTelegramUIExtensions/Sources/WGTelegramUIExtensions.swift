@@ -69,3 +69,50 @@ func wgAppendContextMenuActions(actions: inout [ContextMenuItem], sgActions: ino
         })))
     }
 }
+
+/// Заставка при запуске: на чёрном фоне появляется «W», из неё выезжают остальные буквы «Whygram».
+/// Показывается поверх окна, пока приложение загружается, и не перехватывает нажатия.
+func wgShowLaunchAnimation(in window: UIWindow) {
+    let overlay = UIView(frame: window.bounds)
+    overlay.backgroundColor = .black
+    overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    overlay.isUserInteractionEnabled = false
+    overlay.layer.zPosition = 100000.0
+
+    let font = UIFont.systemFont(ofSize: 46.0, weight: .bold)
+    let label = UILabel()
+    label.text = "Whygram"
+    label.font = font
+    label.textColor = .white
+    label.sizeToFit()
+
+    let fullSize = label.bounds.size
+    let firstLetterWidth = ceil(("W" as NSString).size(withAttributes: [NSAttributedString.Key.font: font]).width)
+
+    let container = UIView(frame: CGRect(origin: CGPoint(), size: CGSize(width: firstLetterWidth, height: fullSize.height)))
+    container.clipsToBounds = true
+    container.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
+    container.center = CGPoint(x: overlay.bounds.midX, y: overlay.bounds.midY)
+    label.frame = CGRect(origin: CGPoint(), size: fullSize)
+    container.addSubview(label)
+    overlay.addSubview(container)
+    window.addSubview(overlay)
+
+    container.alpha = 0.0
+    container.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
+
+    UIView.animate(withDuration: 0.35, delay: 0.0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.0, options: [], animations: {
+        container.alpha = 1.0
+        container.transform = .identity
+    }, completion: { _ in
+        UIView.animate(withDuration: 0.6, delay: 0.1, usingSpringWithDamping: 0.86, initialSpringVelocity: 0.0, options: [], animations: {
+            container.bounds = CGRect(origin: CGPoint(), size: fullSize)
+        }, completion: { _ in
+            UIView.animate(withDuration: 0.3, delay: 0.4, options: [], animations: {
+                overlay.alpha = 0.0
+            }, completion: { _ in
+                overlay.removeFromSuperview()
+            })
+        })
+    })
+}

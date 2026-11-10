@@ -45,6 +45,7 @@ import PeerInfoUI
 import ComponentDisplayAdapters
 import ChatListHeaderComponent
 import NavigationBarComponent
+import AvatarNode // MARK: Whygram
 import ChatListTitleView
 import InviteLinksUI
 import ChatFolderLinkPreviewScreen
@@ -6985,7 +6986,11 @@ private final class ChatListLocationContext {
     }
     
     private var stateDisposable: Disposable?
-    
+    // MARK: Whygram
+    private var wgAccountDisposable: Disposable?
+    private var wgSwitchAccount: (id: AccountRecordId, image: UIImage)?
+    private var wgRepeatLastUpdate: (() -> Void)?
+
     init(
         context: AccountContext,
         location: ChatListControllerLocation,
@@ -7096,7 +7101,21 @@ private final class ChatListLocationContext {
                     guard let self else {
                         return
                     }
-                    
+
+                    // MARK: Whygram
+                    self.wgRepeatLastUpdate = { [weak self] in
+                        self?.updateChatList(
+                            hideStories: hideStories,
+                            networkState: networkState,
+                            proxy: proxy,
+                            passcode: passcode,
+                            stateAndFilterId: stateAndFilterId,
+                            isReorderingTabs: isReorderingTabs,
+                            peerStatus: peerStatus,
+                            presentationData: presentationData,
+                            storyPostingAvailable: storyPostingAvailable
+                        )
+                    }
                     self.updateChatList(
                         hideStories: hideStories, // MARK: Swiftgram
                         networkState: networkState,
@@ -7109,7 +7128,36 @@ private final class ChatListLocationContext {
                         storyPostingAvailable: storyPostingAvailable
                     )
                 })
-            } else {
+
+                // MARK: Whygram
+                // Аватарка другого аккаунта в шапке: нажатие переключает на него. Если аккаунтов
+                // больше двух, показывается тот, с которого пришли в прошлый раз.
+                let wgCurrentAccountId = context.account.id
+                self.wgAccountDisposable = (context.sharedContext.activeAccountsWithInfo
+                |> mapToSignal { accountsInfo -> Signal<(id: AccountRecordId, image: UIImage)?, NoError> in
+                    let others = accountsInfo.accounts.filter { $0.account.id != wgCurrentAccountId }
+                    guard let firstOther = others.first else {
+                        return .single(nil)
+                    }
+                    let previous = WGSettings.shared.string(.previousAccount)
+                    let target = others.first(where: { "\($0.account.id.int64)" == previous }) ?? firstOther
+                    let targetId = target.account.id
+                    return peerAvatarCompleteImage(account: target.account, peer: target.peer, size: CGSize(width: 32.0, height: 32.0))
+                    |> map { image -> (id: AccountRecordId, image: UIImage)? in
+                        guard let image else {
+                            return nil
+                        }
+                        return (id: targetId, image: image.withRenderingMode(.alwaysOriginal))
+                    }
+                }
+                |> deliverOnMainQueue).startStrict(next: { [weak self] value in
+                    guard let self else {
+                        return
+                    }
+                    self.wgSwitchAccount = value
+                    self.wgRepeatLastUpdate?()
+                })
+} else {
                 self.didSetReady = true
                 self.ready.set(.single(true))
             }
@@ -7325,8 +7373,9 @@ private final class ChatListLocationContext {
     deinit {
         self.titleDisposable?.dispose()
         self.stateDisposable?.dispose()
+        self.wgAccountDisposable?.dispose()
     }
-    
+
     private func updateChatList(
         hideStories: Bool, // MARK: Swiftgram
         networkState: AccountNetworkState,
@@ -7469,7 +7518,22 @@ private final class ChatListLocationContext {
                 } else {
                     self.storyButton = nil
                 }
-                
+
+                // MARK: Whygram
+                if let wgSwitchAccount = self.wgSwitchAccount {
+                    let wgTargetId = wgSwitchAccount.id
+                    self.storyButton = NavigationBarComponent.Button(id: "wgAccount",
+                        content: .image(wgSwitchAccount.image),
+                        action: { [weak self] _ in
+                            guard let self else {
+                                return
+                            }
+                            WGSettings.shared.setString(.previousAccount, "\(self.context.account.id.int64)")
+                            self.context.sharedContext.switchToAccount(id: wgTargetId, fromSettingsController: nil, withChatListController: nil)
+                        }
+                    )
+                }
+
                 // MARK: Swiftgram
                 if SGSimpleSettings.shared.hideTabBar {
                     self.settingsButton = NavigationBarComponent.Button(id: "settings",

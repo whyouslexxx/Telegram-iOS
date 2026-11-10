@@ -1901,6 +1901,10 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
         self.mainWindow?.updateDeviceMetrics()
         self.window?.makeKeyAndVisible()
+        // MARK: Whygram
+        if let window = self.window {
+            wgShowLaunchAnimation(in: window)
+        }
 
         for context in connectionOptions.urlContexts {
             let url = context.url

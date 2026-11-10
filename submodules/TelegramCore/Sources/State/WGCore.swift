@@ -91,6 +91,34 @@ func wgMarkRemotelyDeletedMessages(transaction: Transaction, ids: [MessageId]) -
     return idsToDelete
 }
 
+/// Короткое описание сообщения без текста для цитаты: «Голосовое сообщение», «Фото» и так далее.
+private func wgMediaDescription(_ message: Message) -> String {
+    let lang = Locale.preferredLanguages.first ?? "en"
+    for media in message.media {
+        if let file = media as? TelegramMediaFile {
+            if file.isVoice {
+                return wgString("Quote.Voice", lang)
+            } else if file.isInstantVideo {
+                return wgString("Quote.Round", lang)
+            } else if file.isSticker {
+                return wgString("Quote.Sticker", lang)
+            } else if file.isVideo {
+                return wgString("Quote.Video", lang)
+            } else if file.isMusic {
+                return wgString("Quote.Music", lang)
+            } else {
+                return wgString("Quote.File", lang)
+            }
+        } else if media is TelegramMediaImage {
+            return wgString("Quote.Photo", lang)
+        }
+    }
+    if !message.media.isEmpty {
+        return wgString("Quote.Media", lang)
+    }
+    return ""
+}
+
 /// Ответ на сообщение, которое собеседник уже удалил: на сервере его нет, поэтому ответ
 /// отправляется обычным сообщением с цитатой удалённого текста. В группах перед цитатой
 /// ставится автор: «@alex: привет».
@@ -104,6 +132,9 @@ func wgQuoteReplyToDeletedMessage(transaction: Transaction, peerId: PeerId, mess
 
     var quotedText = replySubject.quote?.text ?? repliedMessage.text
     quotedText = quotedText.trimmingCharacters(in: .whitespacesAndNewlines)
+    if quotedText.isEmpty {
+        quotedText = wgMediaDescription(repliedMessage)
+    }
     if quotedText.count > 200 {
         quotedText = String(quotedText.prefix(200)) + "…"
     }

@@ -343,7 +343,26 @@ private let wgFontOptions: [(value: String, title: String)] = [
     ("Avenir Next", "Avenir Next"),
     ("Helvetica Neue", "Helvetica Neue"),
     ("Georgia", "Georgia"),
-    ("Verdana", "Verdana")
+    ("Verdana", "Verdana"),
+    ("Arial", "Arial"),
+    ("Trebuchet MS", "Trebuchet MS"),
+    ("Times New Roman", "Times New Roman"),
+    ("Charter", "Charter"),
+    ("Palatino", "Palatino"),
+    ("Courier New", "Courier New"),
+    ("Menlo", "Menlo"),
+    ("Futura", "Futura"),
+    ("Gill Sans", "Gill Sans"),
+    ("Optima", "Optima"),
+    ("Baskerville", "Baskerville"),
+    ("Didot", "Didot"),
+    ("American Typewriter", "American Typewriter"),
+    ("Copperplate", "Copperplate"),
+    ("Chalkboard SE", "Chalkboard SE"),
+    ("Noteworthy", "Noteworthy"),
+    ("Marker Felt", "Marker Felt"),
+    ("Bradley Hand", "Bradley Hand"),
+    ("Snell Roundhand", "Snell Roundhand")
 ]
 
 private func wgAppearanceController(context: AccountContext) -> ViewController {
