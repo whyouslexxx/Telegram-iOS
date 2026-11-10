@@ -3,8 +3,10 @@ import Postbox
 import SwiftSignalKit
 internal import TelegramApi
 import MtProtoKit
+import SGSimpleSettings // MARK: Whygram
 
 func _internal_requestUpdatePeerIsBlocked(account: Account, peerId: PeerId, isBlocked: Bool, sourceMessageId: MessageId? = nil) -> Signal<Void, NoError> {
+    WGSettings.shared.setPeerBlocked(peerId.toInt64(), isBlocked: isBlocked) // MARK: Whygram
     return account.postbox.transaction { transaction -> Signal<Void, NoError> in
         if let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer, sourceMessageId: sourceMessageId, transaction: transaction) {
             let signal: Signal<Api.Bool, MTRpcError>

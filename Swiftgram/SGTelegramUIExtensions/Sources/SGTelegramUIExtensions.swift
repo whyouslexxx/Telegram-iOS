@@ -1,5 +1,6 @@
 import SGDebugUI
 import SGSettingsUI
+import WGSettingsUI // MARK: Whygram
 import SGStrings
 import UndoUI
 //
@@ -33,6 +34,9 @@ func sgHandleInternalUrlRoute(context: AccountContext, parsedUrl: URL, navigatio
         return true
     case "settings":
         navigationController?.pushViewController(sgSettingsController(context: context))
+        return true
+    case "whygram", "ghost":
+        navigationController?.pushViewController(wgSettingsController(context: context))
         return true
     case "ios_settings":
         context.sharedContext.applicationBindings.openSettings()
@@ -211,8 +215,8 @@ func sgInsertContextMenu(actions: inout [ContextMenuItem], sgActions: inout [Con
     })), at: 0)
     sgActions.insert(.separator, at: 1)
     let sgItems = sgActions
-    let swiftgramSubMenu: ContextMenuItem = .action(ContextMenuActionItem(text: "Swiftgram", icon: { theme in
-        return generateTintedImage(image: UIImage(bundleImageName: "SwiftgramContextMenu"), color: theme.actionSheet.primaryTextColor)
+    let swiftgramSubMenu: ContextMenuItem = .action(ContextMenuActionItem(text: "Whygram", icon: { theme in
+        return generateTintedImage(image: UIImage(bundleImageName: "WGGhost"), color: theme.actionSheet.primaryTextColor)
     }, action: { c, _ in
         popSGItems = { [weak c] in
             c?.popItems()

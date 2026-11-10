@@ -3,6 +3,7 @@ internal import TelegramApi
 import Postbox
 import SwiftSignalKit
 import MtProtoKit
+import SGSimpleSettings // MARK: Whygram
 
 public struct BlockedPeersContextState: Equatable {
     public var isLoadingMore: Bool
@@ -127,6 +128,10 @@ public final class BlockedPeersContext {
                 return
             }
             
+            // MARK: Whygram
+            if case .blocked = strongSelf.subject {
+                WGSettings.shared.addBlockedPeers(peers.map { $0.peerId.toInt64() })
+            }
             var mergedPeers = strongSelf._state.peers
             var existingPeerIds = Set(mergedPeers.map { $0.peerId })
             for peer in peers {

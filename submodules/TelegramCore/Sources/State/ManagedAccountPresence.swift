@@ -3,6 +3,7 @@ internal import TelegramApi
 import Postbox
 import SwiftSignalKit
 import MtProtoKit
+import SGSimpleSettings // MARK: Whygram
 
 private typealias SignalKitTimer = SwiftSignalKit.Timer
 
@@ -17,6 +18,7 @@ private final class AccountPresenceManagerImpl {
     private var onlineTimer: SignalKitTimer?
     
     private var wasOnline: Bool = false
+    private var wgDidSendGhostOffline: Bool = false // MARK: Whygram
     
     init(queue: Queue, shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network) {
         self.queue = queue
@@ -44,8 +46,10 @@ private final class AccountPresenceManagerImpl {
     
     private func updatePresence(_ isOnline: Bool) {
         let request: Signal<Api.Bool, MTRpcError>
+        // MARK: Whygram
+        let wgHideOnline = WGSettings.shared.ghostNoOnline
         if isOnline {
-            let timer = SignalKitTimer(timeout: 30.0, repeat: false, completion: { [weak self] in
+            let timer = SignalKitTimer(timeout: wgHideOnline ? 10.0 : 30.0, repeat: false, completion: { [weak self] in
                 guard let strongSelf = self else {
                     return
                 }
@@ -53,7 +57,18 @@ private final class AccountPresenceManagerImpl {
             }, queue: self.queue)
             self.onlineTimer = timer
             timer.start()
-            request = self.network.request(Api.functions.account.updateStatus(offline: .boolFalse))
+            if wgHideOnline {
+                // Вместо «в сети» отправляем «не в сети». С автоматическим уходом в офлайн
+                // повторяем это по таймеру: отправка сообщения ненадолго показывает аккаунт онлайн.
+                if self.wgDidSendGhostOffline && !WGSettings.shared.ghostAutoOffline {
+                    return
+                }
+                self.wgDidSendGhostOffline = true
+                request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
+            } else {
+                self.wgDidSendGhostOffline = false
+                request = self.network.request(Api.functions.account.updateStatus(offline: .boolFalse))
+            }
         } else {
             self.onlineTimer?.invalidate()
             self.onlineTimer = nil

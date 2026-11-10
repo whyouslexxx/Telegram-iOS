@@ -1,5 +1,6 @@
 import SGStrings
 import SGSettingsUI
+import WGSettingsUI // MARK: Whygram
 import Foundation
 import UIKit
 import Display
@@ -54,7 +55,7 @@ extension PeerInfoScreenNode {
         }
         switch section {
         case .swiftgram:
-            self.controller?.push(sgSettingsController(context: self.context))
+            self.controller?.push(wgSettingsController(context: self.context)) // MARK: Whygram
         case .swiftgramPro:
             if self.context.sharedContext.immediateSGStatus.status > 1 {
                 self.controller?.push(self.context.sharedContext.makeSGProController(context: self.context))

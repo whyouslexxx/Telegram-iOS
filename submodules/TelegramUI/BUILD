@@ -7,6 +7,7 @@ load(
 
 sgdeps = [
     "//Swiftgram/SGSettingsUI:SGSettingsUI",
+    "//Swiftgram/WGSettingsUI:WGSettingsUI",
     "//Swiftgram/SGConfig:SGConfig",
     "//Swiftgram/SGAPIWebSettings:SGAPIWebSettings",
     "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier",

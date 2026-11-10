@@ -297,6 +297,10 @@ public extension TelegramEngine {
         }
 
         public func installInteractiveReadMessagesAction(peerId: PeerId, threadId: Int64?) -> Disposable {
+            // MARK: Whygram
+            if WGSettings.shared.ghostNoRead {
+                return EmptyDisposable
+            }
             return _internal_installInteractiveReadMessagesAction(postbox: self.account.postbox, stateManager: self.account.stateManager, peerId: peerId, threadId: threadId)
         }
         
@@ -1697,7 +1701,7 @@ public extension TelegramEngine {
         
         public func markStoryAsSeen(peerId: EnginePeer.Id, id: Int32, asPinned: Bool) -> Signal<Never, NoError> {
             // MARK: Swiftgram
-            if SGSimpleSettings.shared.isStealthModeEnabled {
+            if SGSimpleSettings.shared.isStealthModeEnabled || WGSettings.shared.ghostNoStoryViews {
                 return .never()
             }
             //

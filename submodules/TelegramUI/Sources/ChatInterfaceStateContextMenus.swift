@@ -1588,6 +1588,8 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             sgActions.append(showJsonAction)
         }
         //
+        // MARK: Whygram
+        wgAppendContextMenuActions(actions: &actions, sgActions: &sgActions, context: context, message: message, controllerInteraction: controllerInteraction, chatPresentationInterfaceState: chatPresentationInterfaceState)
         
         var threadId: Int64?
         var threadMessageCount: Int = 0

@@ -1,6 +1,7 @@
 import Foundation
 import Postbox
 internal import TelegramApi
+import SGSimpleSettings // MARK: Whygram
 
 public extension MessageFlags {
     var isSending: Bool {
@@ -536,6 +537,10 @@ public extension Message {
     }
     
     func isCopyProtected() -> Bool {
+        // MARK: Whygram
+        if WGSettings.shared.bypassCopyProtection, self.id.peerId.namespace == Namespaces.Peer.CloudChannel || self.id.peerId.namespace == Namespaces.Peer.CloudGroup {
+            return false
+        }
         if self.flags.contains(.CopyProtected) {
             return true
         } else if let group = self.peers[self.id.peerId] as? TelegramGroup, group.flags.contains(.copyProtectionEnabled) {

@@ -2,6 +2,7 @@ import Foundation
 import Postbox
 import SwiftSignalKit
 internal import TelegramApi
+import SGSimpleSettings // MARK: Whygram
 
 private class AdMessagesHistoryContextImpl {
     final class CachedMessage: Equatable, Codable {
@@ -640,6 +641,11 @@ public class AdMessagesHistoryContext {
             
             self.impl.with { impl in
                 let stateDisposable = impl.state.get().start(next: { state in
+                    // MARK: Whygram
+                    if WGSettings.shared.noAds {
+                        subscriber.putNext((nil, [], nil, nil))
+                        return
+                    }
                     subscriber.putNext((state.interPostInterval, state.messages, state.startDelay, state.betweenDelay))
                 })
                 disposable.set(stateDisposable)

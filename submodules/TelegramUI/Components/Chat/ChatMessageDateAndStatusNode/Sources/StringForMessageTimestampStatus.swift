@@ -6,6 +6,7 @@ import TelegramStringFormatting
 import TextFormat
 import LocalizedPeerData
 import AccountContext
+import SGSimpleSettings // MARK: Whygram
 
 public enum MessageTimestampStatusFormat {
     case full
@@ -182,6 +183,14 @@ public func stringForMessageTimestampStatus(
         dateText = strings.Message_ImportedDateFormat(dateStringForDay(strings: strings, dateTimeFormat: dateTimeFormat, timestamp: forwardInfo.date), stringForMessageTimestamp(timestamp: forwardInfo.date, dateTimeFormat: dateTimeFormat), dateText).string
     }
     
+    // MARK: Whygram
+    for attribute in message.attributes {
+        if let attribute = attribute as? WGMessageAttribute, attribute.deletedDate != nil {
+            dateText = "\(wgString("Message.Deleted", strings.baseLanguageCode)) \(dateText)"
+            break
+        }
+    }
+
     var authorTitle: String?
     if let author = message.author, case .user = author {
         if let peer = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = peer.info {

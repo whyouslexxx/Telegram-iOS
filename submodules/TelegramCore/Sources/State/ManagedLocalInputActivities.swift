@@ -3,6 +3,7 @@ import Postbox
 import SwiftSignalKit
 internal import TelegramApi
 import MtProtoKit
+import SGSimpleSettings // MARK: Whygram
 
 
 public struct PeerActivitySpace: Hashable {
@@ -145,6 +146,10 @@ private func requestActivity(postbox: Postbox, network: Network, accountPeerId: 
     return postbox.transaction { transaction -> Signal<Void, NoError> in
         if let peer = transaction.getPeer(peerId) {
             if peerId == accountPeerId {
+                return .complete()
+            }
+            // MARK: Whygram
+            if WGSettings.shared.ghostNoTyping {
                 return .complete()
             }
             if let channel = peer as? TelegramChannel, case .broadcast = channel.info {

@@ -172,7 +172,7 @@ func sgPeerInfoSettingsItems(context: AccountContext, paymentsEnabled: Bool, pre
             interaction.openSettings(.swiftgramPro)
         }))
     }
-    items.append(PeerInfoScreenDisclosureItem(id: 1, label: swiftgramLabel, text: "Swiftgram", icon: PresentationResourcesSettings.swiftgram, action: {
+    items.append(PeerInfoScreenDisclosureItem(id: 1, label: swiftgramLabel, text: "Whygram", icon: PresentationResourcesSettings.whygram, action: {
         interaction.openSettings(.swiftgram)
     }))
     return items

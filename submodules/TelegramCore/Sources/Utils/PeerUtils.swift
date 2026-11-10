@@ -260,6 +260,10 @@ public extension Peer {
     }
     
     var isCopyProtectionEnabled: Bool {
+        // MARK: Whygram
+        if WGSettings.shared.bypassCopyProtection {
+            return false
+        }
         switch self {
         case let group as TelegramGroup:
             return group.flags.contains(.copyProtectionEnabled)

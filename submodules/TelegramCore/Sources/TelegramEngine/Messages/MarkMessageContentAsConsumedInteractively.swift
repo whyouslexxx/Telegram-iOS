@@ -2,10 +2,16 @@ import Foundation
 import Postbox
 internal import TelegramApi
 import SwiftSignalKit
+import SGSimpleSettings // MARK: Whygram
 
 func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messageId: MessageId) -> Signal<Void, NoError> {
     return postbox.transaction { transaction -> Void in
         if let message = transaction.getMessage(messageId), message.flags.contains(.Incoming) {
+            // MARK: Whygram
+            // В режиме призрака не сообщаем о прослушивании. Исчезающие медиа это не затрагивает.
+            if WGSettings.shared.ghostNoRead && !message.attributes.contains(where: { $0 is AutoremoveTimeoutMessageAttribute }) {
+                return
+            }
             var updateMessage = false
             var updatedAttributes = message.attributes
             

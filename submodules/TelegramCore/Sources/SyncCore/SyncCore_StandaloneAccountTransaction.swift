@@ -123,6 +123,15 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
             if previous.isEmpty {
                 return
             }
+            // MARK: Whygram
+            if !updated.contains(where: { $0 is WGMessageAttribute }) {
+                for attribute in previous {
+                    if let attribute = attribute as? WGMessageAttribute {
+                        updated.append(attribute)
+                        break
+                    }
+                }
+            }
             var audioTranscription: AudioTranscriptionMessageAttribute?
             for attribute in previous {
                 if let attribute = attribute as? AudioTranscriptionMessageAttribute {

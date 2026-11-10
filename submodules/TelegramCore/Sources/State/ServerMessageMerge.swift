@@ -41,5 +41,11 @@ func mergedServerMessageUpdate(previous previousMessage: Message, updated messag
         updatedMedia = previousMessage.media
     }
 
+    // MARK: Whygram
+    if let wgAttribute = wgAttributeRecordingEdit(previous: previousMessage, updatedText: message.text) {
+        updatedAttributes.removeAll(where: { $0 is WGMessageAttribute })
+        updatedAttributes.append(wgAttribute)
+    }
+
     return message.withUpdatedLocalTags(updatedLocalTags).withUpdatedFlags(updatedFlags).withUpdatedAttributes(updatedAttributes).withUpdatedMedia(updatedMedia)
 }

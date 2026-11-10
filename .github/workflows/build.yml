@@ -139,7 +139,7 @@ jobs:
             --overrideXcodeVersion \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             --cacheDir=/Users/Shared/bazel-disk-cache \
-            build \
+            build --continueOnError \
             --configurationPath="build-system/ci-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 \
@@ -151,11 +151,11 @@ jobs:
           cd /Users/Shared/telegram-ios
           OUTPUT_PATH="$PWD/build/artifacts"
           rm -rf "$OUTPUT_PATH" build/DSYMs; mkdir -p "$OUTPUT_PATH" build/DSYMs
-          cp -L bazel-bin/Telegram/Swiftgram.ipa "$OUTPUT_PATH/Swiftgram.ipa"
+          cp -L bazel-bin/Telegram/Swiftgram.ipa "$OUTPUT_PATH/Whygram.ipa"
           for f in bazel-bin/Telegram/*.dSYM; do
             cp -RL "$f" build/DSYMs/
           done
-          (cd build && zip -qr "$OUTPUT_PATH/Swiftgram.DSYMs.zip" DSYMs)
+          (cd build && zip -qr "$OUTPUT_PATH/Whygram.DSYMs.zip" DSYMs)
           ls -la "$OUTPUT_PATH"
 
       # Сохраняем кэш даже при упавшей сборке, чтобы не компилировать всё заново.
@@ -172,7 +172,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Swiftgram-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
+          name: Whygram-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
           path: /Users/Shared/telegram-ios/build/artifacts/*
           retention-days: 14
 
@@ -180,8 +180,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ env.BUILD_NUMBER }}
-          name: Swiftgram ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})
-          body: Unsigned build of Swiftgram ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }}). Подпиши перед установкой (xtool / AltStore / Sideloadly).
+          name: Whygram ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})
+          body: Unsigned build of Whygram ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }}). Подпиши перед установкой (xtool / AltStore / Sideloadly).
           files: |
-            /Users/Shared/telegram-ios/build/artifacts/Swiftgram.ipa
-            /Users/Shared/telegram-ios/build/artifacts/Swiftgram.DSYMs.zip
+            /Users/Shared/telegram-ios/build/artifacts/Whygram.ipa
+            /Users/Shared/telegram-ios/build/artifacts/Whygram.DSYMs.zip

@@ -1,0 +1,535 @@
+// MARK: Whygram
+import Foundation
+import UIKit
+import Display
+import SwiftSignalKit
+import Postbox
+import TelegramCore
+import TelegramPresentationData
+import TelegramStringFormatting
+import ItemListUI
+import PresentationDataUtils
+import AccountContext
+import AppBundle
+import PromptUI
+import TextFormat
+import SGSimpleSettings
+import SGSettingsUI
+
+// MARK: - Список
+
+private final class WGArguments {
+    let setBool: (String, Bool) -> Void
+    let open: (String) -> Void
+
+    init(setBool: @escaping (String, Bool) -> Void = { _, _ in }, open: @escaping (String) -> Void = { _ in }) {
+        self.setBool = setBool
+        self.open = open
+    }
+}
+
+private enum WGEntry: ItemListNodeEntry {
+    case header(id: Int, section: Int32, text: String)
+    case toggle(id: Int, section: Int32, key: String, title: String, value: Bool, enabled: Bool)
+    case notice(id: Int, section: Int32, text: String)
+    case link(id: Int, section: Int32, key: String, title: String, label: String, icon: String?, color: UInt32)
+    case action(id: Int, section: Int32, key: String, title: String, destructive: Bool)
+    case text(id: Int, section: Int32, key: String, text: String)
+
+    var section: ItemListSectionId {
+        switch self {
+        case let .header(_, section, _):
+            return section
+        case let .toggle(_, section, _, _, _, _):
+            return section
+        case let .notice(_, section, _):
+            return section
+        case let .link(_, section, _, _, _, _, _):
+            return section
+        case let .action(_, section, _, _, _):
+            return section
+        case let .text(_, section, _, _):
+            return section
+        }
+    }
+
+    var stableId: Int {
+        switch self {
+        case let .header(id, _, _):
+            return id
+        case let .toggle(id, _, _, _, _, _):
+            return id
+        case let .notice(id, _, _):
+            return id
+        case let .link(id, _, _, _, _, _, _):
+            return id
+        case let .action(id, _, _, _, _):
+            return id
+        case let .text(id, _, _, _):
+            return id
+        }
+    }
+
+    static func <(lhs: WGEntry, rhs: WGEntry) -> Bool {
+        return lhs.stableId < rhs.stableId
+    }
+
+    func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
+        let arguments = arguments as! WGArguments
+        switch self {
+        case let .header(_, _, text):
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
+        case let .toggle(_, _, key, title, value, enabled):
+            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enabled: enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setBool(key, value)
+            })
+        case let .notice(_, _, text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+        case let .link(_, _, key, title, label, icon, color):
+            var iconImage: UIImage?
+            if let icon {
+                iconImage = wgSettingsIcon(icon, color: color)
+            }
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: iconImage, title: title, label: label, sectionId: self.section, style: .blocks, action: {
+                arguments.open(key)
+            })
+        case let .action(_, _, key, title, destructive):
+            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: destructive ? .destructive : .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                arguments.open(key)
+            })
+        case let .text(_, _, key, text):
+            return ItemListMultilineTextItem(presentationData: presentationData, text: text, enabledEntityTypes: [], sectionId: self.section, style: .blocks, action: {
+                arguments.open(key)
+            })
+        }
+    }
+}
+
+private let wgIconCacheLock = NSLock()
+private var wgIconCache: [String: UIImage] = [:]
+
+/// Иконка раздела: белый глиф Lucide на цветной плашке, как в настройках Telegram.
+private func wgSettingsIcon(_ name: String, color: UInt32) -> UIImage? {
+    let cacheKey = "\(name)-\(color)"
+    wgIconCacheLock.lock()
+    let cached = wgIconCache[cacheKey]
+    wgIconCacheLock.unlock()
+    if let cached {
+        return cached
+    }
+    let image = renderSettingsIcon(name: name, scaleFactor: 18.0 / 24.0, backgroundColors: [UIColor(rgb: color)])
+    if let image {
+        wgIconCacheLock.lock()
+        wgIconCache[cacheKey] = image
+        wgIconCacheLock.unlock()
+    }
+    return image
+}
+
+private final class WGRefresh {
+    private var counter: Int = 0
+    private let promise = ValuePromise<Int>(0, ignoreRepeated: false)
+
+    var signal: Signal<Int, NoError> {
+        return self.promise.get()
+    }
+
+    func trigger() {
+        self.counter += 1
+        self.promise.set(self.counter)
+    }
+}
+
+private func wgListController(context: AccountContext, title: @escaping (String) -> String, refresh: WGRefresh, arguments: WGArguments, entries: @escaping (PresentationData) -> [WGEntry]) -> ItemListController {
+    let signal = combineLatest(context.sharedContext.presentationData, refresh.signal)
+    |> map { presentationData, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(title(presentationData.strings.baseLanguageCode)), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries(presentationData), style: .blocks, ensureVisibleItemTag: nil, initialScrollToItem: nil)
+        return (controllerState, (listState, arguments))
+    }
+    let controller = ItemListController(context: context, state: signal)
+    controller.didAppear = { _ in
+        refresh.trigger()
+    }
+    return controller
+}
+
+private func wgSetBool(_ key: String, _ value: Bool) {
+    if let settingKey = WGSettings.Key(rawValue: key) {
+        WGSettings.shared.set(settingKey, value)
+    } else if key == "warnOnStoriesOpen" {
+        SGSimpleSettings.shared.warnOnStoriesOpen = value
+    }
+}
+
+private func wgToggle(_ id: Int, _ section: Int32, _ key: WGSettings.Key, _ titleKey: String, _ lang: String, enabled: Bool = true) -> WGEntry {
+    return .toggle(id: id, section: section, key: key.rawValue, title: wgString(titleKey, lang), value: WGSettings.shared.bool(key), enabled: enabled)
+}
+
+// MARK: - Главный экран
+
+public func wgSettingsController(context: AccountContext) -> ViewController {
+    let refresh = WGRefresh()
+    var pushImpl: ((ViewController) -> Void)?
+
+    let arguments = WGArguments(open: { key in
+        switch key {
+        case "ghost":
+            pushImpl?(wgGhostController(context: context))
+        case "saving":
+            pushImpl?(wgSavingController(context: context))
+        case "filters":
+            pushImpl?(wgFiltersController(context: context))
+        case "other":
+            pushImpl?(wgOtherController(context: context))
+        case "interface":
+            pushImpl?(sgSettingsController(context: context))
+        default:
+            break
+        }
+    })
+
+    let controller = wgListController(context: context, title: { _ in "Whygram" }, refresh: refresh, arguments: arguments, entries: { presentationData in
+        let lang = presentationData.strings.baseLanguageCode
+        let settings = WGSettings.shared
+        let on = wgString("Common.On", lang)
+        let off = wgString("Common.Off", lang)
+        let filtersCount = settings.globalFilters.count + settings.chatFilters.values.reduce(0, { $0 + $1.count })
+
+        var entries: [WGEntry] = []
+        entries.append(.link(id: 1, section: 0, key: "ghost", title: wgString("Main.Ghost", lang), label: settings.bool(.ghostMode) ? on : off, icon: "WGGhost", color: 0x5E5CE6))
+        entries.append(.link(id: 2, section: 0, key: "saving", title: wgString("Main.Saving", lang), label: (settings.saveDeleted || settings.saveEdits) ? on : off, icon: "WGSaving", color: 0x34C759))
+        entries.append(.link(id: 3, section: 0, key: "filters", title: wgString("Main.Filters", lang), label: settings.bool(.filtersEnabled) && filtersCount != 0 ? "\(filtersCount)" : "", icon: "WGFilter", color: 0xFF9F0A))
+        entries.append(.link(id: 4, section: 0, key: "other", title: wgString("Main.Other", lang), label: "", icon: "WGShield", color: 0x0A84FF))
+
+        entries.append(.header(id: 10, section: 1, text: wgString("Main.Interface.Header", lang)))
+        entries.append(.link(id: 11, section: 1, key: "interface", title: wgString("Main.Interface", lang), label: "", icon: "WGInterface", color: 0x8E8E93))
+        entries.append(.notice(id: 12, section: 1, text: wgString("Main.Notice", lang)))
+        return entries
+    })
+    pushImpl = { [weak controller] c in
+        (controller?.navigationController as? NavigationController)?.pushViewController(c)
+    }
+    return controller
+}
+
+// MARK: - Режим призрака
+
+private func wgGhostController(context: AccountContext) -> ViewController {
+    let refresh = WGRefresh()
+    let arguments = WGArguments(setBool: { key, value in
+        wgSetBool(key, value)
+        refresh.trigger()
+    })
+    return wgListController(context: context, title: { wgString("Main.Ghost", $0) }, refresh: refresh, arguments: arguments, entries: { presentationData in
+        let lang = presentationData.strings.baseLanguageCode
+        let settings = WGSettings.shared
+        let master = settings.bool(.ghostMode)
+
+        var entries: [WGEntry] = []
+        entries.append(wgToggle(1, 0, .ghostMode, "Ghost.Enable", lang))
+        entries.append(.notice(id: 2, section: 0, text: wgString("Ghost.Enable.Notice", lang)))
+
+        entries.append(.header(id: 10, section: 1, text: wgString("Ghost.Hide.Header", lang)))
+        entries.append(wgToggle(11, 1, .ghostNoRead, "Ghost.NoRead", lang, enabled: master))
+        entries.append(wgToggle(12, 1, .ghostNoStoryViews, "Ghost.NoStoryViews", lang, enabled: master))
+        entries.append(wgToggle(13, 1, .ghostNoOnline, "Ghost.NoOnline", lang, enabled: master))
+        entries.append(wgToggle(14, 1, .ghostNoTyping, "Ghost.NoTyping", lang, enabled: master))
+        entries.append(.notice(id: 15, section: 1, text: wgString("Ghost.Hide.Notice", lang)))
+
+        entries.append(.header(id: 20, section: 2, text: wgString("Ghost.Behavior.Header", lang)))
+        entries.append(wgToggle(21, 2, .ghostAutoOffline, "Ghost.AutoOffline", lang, enabled: master && settings.bool(.ghostNoOnline)))
+        entries.append(wgToggle(22, 2, .ghostReadOnInteract, "Ghost.ReadOnInteract", lang, enabled: master && settings.bool(.ghostNoRead)))
+        entries.append(wgToggle(23, 2, .ghostSendScheduled, "Ghost.SendScheduled", lang, enabled: master))
+        entries.append(.notice(id: 24, section: 2, text: wgString("Ghost.SendScheduled.Notice", lang)))
+
+        entries.append(.toggle(id: 30, section: 3, key: "warnOnStoriesOpen", title: wgString("Ghost.StoryWarn", lang), value: SGSimpleSettings.shared.warnOnStoriesOpen, enabled: true))
+        return entries
+    })
+}
+
+// MARK: - Сохранение
+
+private func wgSavingController(context: AccountContext) -> ViewController {
+    let refresh = WGRefresh()
+    let arguments = WGArguments(setBool: { key, value in
+        wgSetBool(key, value)
+        refresh.trigger()
+    })
+    return wgListController(context: context, title: { wgString("Main.Saving", $0) }, refresh: refresh, arguments: arguments, entries: { presentationData in
+        let lang = presentationData.strings.baseLanguageCode
+        let settings = WGSettings.shared
+
+        var entries: [WGEntry] = []
+        entries.append(.header(id: 1, section: 0, text: wgString("Saving.Header", lang)))
+        entries.append(wgToggle(2, 0, .saveDeleted, "Saving.Deleted", lang))
+        entries.append(wgToggle(3, 0, .saveEdits, "Saving.Edits", lang))
+        entries.append(.notice(id: 4, section: 0, text: wgString("Saving.Notice", lang)))
+
+        entries.append(wgToggle(10, 1, .saveFromBots, "Saving.Bots", lang, enabled: settings.saveDeleted || settings.saveEdits))
+        entries.append(.notice(id: 11, section: 1, text: wgString("Saving.Limits", lang)))
+        return entries
+    })
+}
+
+// MARK: - Реклама и ограничения
+
+private func wgOtherController(context: AccountContext) -> ViewController {
+    let refresh = WGRefresh()
+    let arguments = WGArguments(setBool: { key, value in
+        wgSetBool(key, value)
+        refresh.trigger()
+    })
+    return wgListController(context: context, title: { wgString("Main.Other", $0) }, refresh: refresh, arguments: arguments, entries: { presentationData in
+        let lang = presentationData.strings.baseLanguageCode
+
+        var entries: [WGEntry] = []
+        entries.append(.header(id: 1, section: 0, text: wgString("Other.Ads.Header", lang)))
+        entries.append(wgToggle(2, 0, .noAds, "Other.NoAds", lang))
+        entries.append(.notice(id: 3, section: 0, text: wgString("Other.NoAds.Notice", lang)))
+
+        entries.append(.header(id: 10, section: 1, text: wgString("Other.Restrictions.Header", lang)))
+        entries.append(wgToggle(11, 1, .bypassCopyProtection, "Other.CopyProtection", lang))
+        entries.append(.notice(id: 12, section: 1, text: wgString("Other.CopyProtection.Notice", lang)))
+        return entries
+    })
+}
+
+// MARK: - Фильтры
+
+/// Подгружает список заблокированных, чтобы их сообщения можно было скрывать.
+private final class WGBlockedLoader {
+    private var blockedContext: BlockedPeersContext?
+    private var disposable: Disposable?
+
+    deinit {
+        self.disposable?.dispose()
+    }
+
+    func load(account: Account, updated: @escaping () -> Void) {
+        let blockedContext = BlockedPeersContext(account: account, subject: .blocked)
+        self.blockedContext = blockedContext
+        var remainingPages = 30
+        self.disposable?.dispose()
+        self.disposable = (blockedContext.state
+        |> deliverOnMainQueue).start(next: { [weak blockedContext] state in
+            updated()
+            if state.canLoadMore && !state.isLoadingMore && remainingPages > 0 {
+                remainingPages -= 1
+                blockedContext?.loadMore()
+            }
+        })
+    }
+}
+
+private func wgFiltersController(context: AccountContext) -> ViewController {
+    let refresh = WGRefresh()
+    let blockedLoader = WGBlockedLoader()
+    let chatTitles = Atomic<[Int64: String]>(value: [:])
+    var presentImpl: ((ViewController, Any?) -> Void)?
+
+    let reloadChatTitles: () -> Void = {
+        let peerIds = Array(WGSettings.shared.chatFilters.keys)
+        if peerIds.isEmpty {
+            return
+        }
+        let _ = (context.account.postbox.transaction { transaction -> [Int64: String] in
+            var result: [Int64: String] = [:]
+            for peerId in peerIds {
+                if let peer = transaction.getPeer(PeerId(peerId)) {
+                    result[peerId] = peer.debugDisplayTitle
+                }
+            }
+            return result
+        }
+        |> deliverOnMainQueue).start(next: { titles in
+            let _ = chatTitles.swap(titles)
+            refresh.trigger()
+        })
+    }
+
+    let confirmDelete: (@escaping () -> Void) -> Void = { remove in
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: wgString("Common.Delete", presentationData.strings.baseLanguageCode), color: .destructive, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                    remove()
+                    refresh.trigger()
+                })
+            ]),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                })
+            ])
+        ])
+        presentImpl?(actionSheet, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+    }
+
+    let arguments = WGArguments(setBool: { key, value in
+        wgSetBool(key, value)
+        if key == WGSettings.Key.hideBlocked.rawValue && value {
+            blockedLoader.load(account: context.account, updated: {
+                refresh.trigger()
+            })
+        }
+        refresh.trigger()
+    }, open: { key in
+        if key == "add" {
+            let lang = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode
+            let prompt = promptController(context: context, text: wgString("Filters.Add.Title", lang), value: "", placeholder: wgString("Filters.Add.Placeholder", lang), characterLimit: 200, apply: { value in
+                if let value, !value.isEmpty {
+                    WGSettings.shared.addGlobalFilter(value)
+                    refresh.trigger()
+                }
+            })
+            presentImpl?(prompt, nil)
+        } else if key.hasPrefix("g:") {
+            guard let index = Int(key.dropFirst(2)) else {
+                return
+            }
+            confirmDelete({
+                var filters = WGSettings.shared.globalFilters
+                if index < filters.count {
+                    filters.remove(at: index)
+                    WGSettings.shared.setGlobalFilters(filters)
+                }
+            })
+        } else if key.hasPrefix("c:") {
+            let parts = key.dropFirst(2).split(separator: ":")
+            guard parts.count == 2, let peerId = Int64(parts[0]), let index = Int(parts[1]) else {
+                return
+            }
+            confirmDelete({
+                var filters = WGSettings.shared.chatFilters(peerId: peerId)
+                if index < filters.count {
+                    filters.remove(at: index)
+                    WGSettings.shared.setChatFilters(filters, peerId: peerId)
+                }
+            })
+        }
+    })
+
+    let controller = wgListController(context: context, title: { wgString("Main.Filters", $0) }, refresh: refresh, arguments: arguments, entries: { presentationData in
+        let lang = presentationData.strings.baseLanguageCode
+        let settings = WGSettings.shared
+        let titles = chatTitles.with { $0 }
+
+        var entries: [WGEntry] = []
+        entries.append(wgToggle(1, 0, .filtersEnabled, "Filters.Enable", lang))
+        entries.append(.notice(id: 2, section: 0, text: wgString("Filters.Enable.Notice", lang)))
+
+        entries.append(.header(id: 10, section: 1, text: wgString("Filters.Global.Header", lang)))
+        for (index, filter) in settings.globalFilters.enumerated() {
+            entries.append(.text(id: 100 + index, section: 1, key: "g:\(index)", text: filter))
+        }
+        entries.append(.action(id: 5000, section: 1, key: "add", title: wgString("Filters.Add", lang), destructive: false))
+        entries.append(.notice(id: 5001, section: 1, text: wgString("Filters.Add.Notice", lang)))
+
+        let chatFilters = settings.chatFilters
+        if !chatFilters.isEmpty {
+            entries.append(.header(id: 6000, section: 2, text: wgString("Filters.Chats.Header", lang)))
+            var nextId = 6001
+            for peerId in chatFilters.keys.sorted() {
+                let title = titles[peerId] ?? "\(peerId)"
+                for (index, filter) in (chatFilters[peerId] ?? []).enumerated() {
+                    entries.append(.text(id: nextId, section: 2, key: "c:\(peerId):\(index)", text: "\(title): \(filter)"))
+                    nextId += 1
+                }
+            }
+        }
+
+        entries.append(wgToggle(9000, 3, .hideBlocked, "Filters.Blocked", lang))
+        entries.append(.notice(id: 9001, section: 3, text: wgString("Filters.Blocked.Notice", lang, "\(settings.blockedPeersCount)")))
+        return entries
+    })
+    presentImpl = { [weak controller] c, a in
+        controller?.present(c, in: .window(.root), with: a)
+    }
+    reloadChatTitles()
+    if WGSettings.shared.hideBlocked {
+        blockedLoader.load(account: context.account, updated: {
+            refresh.trigger()
+        })
+    }
+    return controller
+}
+
+// MARK: - Добавление фильтра из сообщения
+
+public func wgPresentAddFilter(context: AccountContext, peerId: PeerId, text: String, present: @escaping (ViewController, Any?) -> Void) {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let lang = presentationData.strings.baseLanguageCode
+
+    var suggestion = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    if suggestion.count > 64 {
+        suggestion = String(suggestion.prefix(64))
+    }
+
+    let askPattern: (Bool) -> Void = { onlyThisChat in
+        let prompt = promptController(context: context, text: wgString("Filters.Add.Title", lang), value: suggestion, placeholder: wgString("Filters.Add.Placeholder", lang), characterLimit: 200, apply: { value in
+            guard let value, !value.isEmpty else {
+                return
+            }
+            if onlyThisChat {
+                WGSettings.shared.addChatFilter(value, peerId: peerId.toInt64())
+            } else {
+                WGSettings.shared.addGlobalFilter(value)
+            }
+            if !WGSettings.shared.bool(.filtersEnabled) {
+                WGSettings.shared.set(.filtersEnabled, true)
+            }
+        })
+        present(prompt, nil)
+    }
+
+    let actionSheet = ActionSheetController(presentationData: presentationData)
+    actionSheet.setItemGroups([
+        ActionSheetItemGroup(items: [
+            ActionSheetButtonItem(title: wgString("Filters.Scope.Chat", lang), color: .accent, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                askPattern(true)
+            }),
+            ActionSheetButtonItem(title: wgString("Filters.Scope.All", lang), color: .accent, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                askPattern(false)
+            })
+        ]),
+        ActionSheetItemGroup(items: [
+            ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+            })
+        ])
+    ])
+    present(actionSheet, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+}
+
+// MARK: - История правок
+
+public func wgEditHistoryController(context: AccountContext, message: Message) -> ViewController {
+    let refresh = WGRefresh()
+    let edits = message.wgAttribute?.edits ?? []
+    let currentText = message.text
+
+    return wgListController(context: context, title: { wgString("EditHistory.Title", $0) }, refresh: refresh, arguments: WGArguments(), entries: { presentationData in
+        let lang = presentationData.strings.baseLanguageCode
+        let emptyText = wgString("EditHistory.Empty", lang)
+
+        var entries: [WGEntry] = []
+        entries.append(.header(id: 1, section: 0, text: wgString("EditHistory.Current", lang)))
+        entries.append(.text(id: 2, section: 0, key: "", text: currentText.isEmpty ? emptyText : currentText))
+
+        var nextId = 10
+        var section: Int32 = 1
+        for edit in edits.reversed() {
+            let date = stringForMediumDate(timestamp: edit.date, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat)
+            entries.append(.header(id: nextId, section: section, text: wgString("EditHistory.Before", lang, date.uppercased())))
+            entries.append(.text(id: nextId + 1, section: section, key: "", text: edit.text.isEmpty ? emptyText : edit.text))
+            nextId += 2
+            section += 1
+        }
+        return entries
+    })
+}

@@ -153,6 +153,11 @@ func chatHistoryEntriesForView(
         if pendingRemovedMessages.contains(message.id) {
             continue
         }
+
+        // MARK: Whygram
+        if wgShouldHideMessage(message, accountPeerId: context.account.peerId) {
+            continue
+        }
         
         if case let .replyThread(replyThreadMessage) = location, replyThreadMessage.isForumPost {
             for media in message.media {

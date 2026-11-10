@@ -3,6 +3,7 @@ import Postbox
 internal import TelegramApi
 import SwiftSignalKit
 import Emoji
+import SGSimpleSettings // MARK: Whygram
 
 public enum EnqueueMessageGrouping {
     case none
@@ -728,6 +729,8 @@ private func opportunisticallyTransformOutgoingMedia(network: Network, postbox: 
 }
 
 public func enqueueMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {
+    // MARK: Whygram
+    let messages = wgPreparedOutgoingMessages(accountPeerId: account.peerId, peerId: peerId, messages: messages)
     let signal: Signal<[(Bool, EnqueueMessage)], NoError>
     if let transformOutgoingMessageMedia = account.transformOutgoingMessageMedia {
         signal = opportunisticallyTransformOutgoingMedia(network: account.network, postbox: account.postbox, transformOutgoingMessageMedia: transformOutgoingMessageMedia, messages: messages, userInteractive: true)
@@ -879,6 +882,14 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
         }
     }
     
+    // MARK: Whygram
+    // «Читать при взаимодействии»: отправка сообщения отмечает чат прочитанным.
+    if !account.isSupportUser && WGSettings.shared.ghostReadOnInteract && peerId.namespace != Namespaces.Peer.SecretChat {
+        if let index = transaction.getTopPeerMessageIndex(peerId: peerId, namespace: Namespaces.Message.Cloud) {
+            _internal_applyMaxReadIndexInteractively(transaction: transaction, stateManager: account.stateManager, index: index)
+        }
+    }
+
     // Sending to a user whose chat still shows the report/block panel ends its suspicious state
     // (`CachedUserData.isSuspiciousPeer`): only the report and block flags go, so an Add Contact
     // offer stays. A scheduled message reaches no one yet and changes nothing.
