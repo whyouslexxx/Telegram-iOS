@@ -81,6 +81,9 @@ jobs:
           src = 'build-system/appstore-configuration.json'
           cfg = json.load(open(src))
           cfg.setdefault('sg_config', '{}')
+          # Re-signed builds cannot use Telegram's CloudKit container. Calling
+          # CKContainer.default() without its entitlements aborts during startup.
+          cfg['enable_icloud'] = False
           for key, env in [('api_id', 'TG_API_ID'), ('api_hash', 'TG_API_HASH'),
                            ('bundle_id', 'TG_BUNDLE_ID'), ('team_id', 'TG_TEAM_ID')]:
               if os.environ.get(env):
