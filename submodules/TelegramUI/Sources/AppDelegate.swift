@@ -592,7 +592,10 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         try! PasscodeEnvironment.shared.configure(PasscodeConfiguration(appGroupIdentifier: appGroupName, processRole: .mainApp, biometricKeychainService: walletBiometricKeychainService), privateAccessGroup: {
             BuildConfig.keychainAccessGroup(baseAppBundleId: baseAppBundleId)
         })
+        // Re-signing services may remove App Groups. Keep the main app usable in
+        // its private container; extensions still require a valid shared group.
         let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.appendingPathComponent("WhygramStandalone", isDirectory: true)
         
         let buildConfig = BuildConfig(baseAppBundleId: baseAppBundleId)
         self.buildConfig = buildConfig
@@ -717,6 +720,14 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         
         guard let appGroupUrl = maybeAppGroupUrl else {
             self.mainWindow?.presentNative(UIAlertController(title: nil, message: "Error 2", preferredStyle: .alert))
+            return true
+        }
+        do {
+            try FileManager.default.createDirectory(at: appGroupUrl, withIntermediateDirectories: true, attributes: nil)
+        } catch {
+            let alert = UIAlertController(title: "Whygram", message: "Unable to open application storage: \(error.localizedDescription)", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            self.mainWindow?.presentNative(alert)
             return true
         }
         
