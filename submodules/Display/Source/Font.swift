@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import SGSimpleSettings // MARK: Whygram
 
 public struct Font {
     public enum Design {
@@ -160,7 +161,39 @@ public struct Font {
     private static let cache = Cache()
     
     public static func with(size: CGFloat, design: Design = .regular, weight: Weight = .regular, width: Width = .standard, traits: Traits = []) -> UIFont {
-        let key = "\(size)_\(design.key)_\(weight.key)_\(width.key)_\(traits.rawValue)"
+        // MARK: Whygram
+        // Свой шрифт подменяет только обычное начертание; моноширинный код, цитаты и камера не трогаются.
+        var design = design
+        let wgFont = design == .regular ? WGSettings.shared.string(.appFont) : ""
+        var wgFontFamily: String?
+        switch wgFont {
+        case "":
+            break
+        case "rounded":
+            design = .round
+        case "serif":
+            design = .serif
+        case "mono":
+            design = .monospace
+        default:
+            wgFontFamily = wgFont
+        }
+        let key = "\(size)_\(design.key)_\(weight.key)_\(width.key)_\(traits.rawValue)_\(wgFont)"
+        if let wgFontFamily {
+            if let cachedFont = self.cache.get(key) {
+                return cachedFont
+            }
+            var descriptor = UIFontDescriptor(fontAttributes: [
+                UIFontDescriptor.AttributeName.family: wgFontFamily,
+                UIFontDescriptor.AttributeName.traits: [UIFontDescriptor.TraitKey.weight: weight.weight]
+            ])
+            if traits.contains(.italic), let italicDescriptor = descriptor.withSymbolicTraits(.traitItalic) {
+                descriptor = italicDescriptor
+            }
+            let font = UIFont(descriptor: descriptor, size: size)
+            self.cache.set(font, key: key)
+            return font
+        }
         
         if let cachedFont = self.cache.get(key) {
             return cachedFont
@@ -289,18 +322,30 @@ public struct Font {
     }
     
     public static func regular(_ size: CGFloat) -> UIFont {
+        if WGSettings.shared.hasCustomFont {
+            return self.with(size: size, design: .regular, weight: .regular)
+        }
         return UIFont.systemFont(ofSize: size)
     }
     
     public static func medium(_ size: CGFloat) -> UIFont {
+        if WGSettings.shared.hasCustomFont {
+            return self.with(size: size, design: .regular, weight: .medium)
+        }
         return UIFont.systemFont(ofSize: size, weight: UIFont.Weight.medium)
     }
     
     public static func semibold(_ size: CGFloat) -> UIFont {
+        if WGSettings.shared.hasCustomFont {
+            return self.with(size: size, design: .regular, weight: .semibold)
+        }
         return UIFont.systemFont(ofSize: size, weight: UIFont.Weight.semibold)
     }
     
     public static func bold(_ size: CGFloat) -> UIFont {
+        if WGSettings.shared.hasCustomFont {
+            return self.with(size: size, design: .regular, weight: .bold)
+        }
         if #available(iOS 8.2, *) {
             return UIFont.boldSystemFont(ofSize: size)
         } else {
@@ -313,10 +358,16 @@ public struct Font {
     }
     
     public static func light(_ size: CGFloat) -> UIFont {
+        if WGSettings.shared.hasCustomFont {
+            return self.with(size: size, design: .regular, weight: .light)
+        }
         return UIFont.systemFont(ofSize: size, weight: UIFont.Weight.light)
     }
     
     public static func semiboldItalic(_ size: CGFloat) -> UIFont {
+        if WGSettings.shared.hasCustomFont {
+            return self.with(size: size, design: .regular, weight: .semibold, traits: [.italic])
+        }
         if let descriptor = UIFont.systemFont(ofSize: size).fontDescriptor.withSymbolicTraits([.traitBold, .traitItalic]) {
             return UIFont(descriptor: descriptor, size: size)
         } else {
@@ -325,6 +376,9 @@ public struct Font {
     }
     
     public static func mediumItalic(_ size: CGFloat) -> UIFont {
+        if WGSettings.shared.hasCustomFont {
+            return self.with(size: size, design: .regular, weight: .medium, traits: [.italic])
+        }
         if let descriptor = UIFont.systemFont(ofSize: size, weight: .medium).fontDescriptor.withSymbolicTraits([.traitItalic]) {
             return UIFont(descriptor: descriptor, size: size)
         } else {
@@ -349,6 +403,9 @@ public struct Font {
     }
     
     public static func italic(_ size: CGFloat) -> UIFont {
+        if WGSettings.shared.hasCustomFont {
+            return self.with(size: size, design: .regular, weight: .regular, traits: [.italic])
+        }
         return UIFont.italicSystemFont(ofSize: size)
     }
 }

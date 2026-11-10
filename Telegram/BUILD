@@ -323,6 +323,11 @@ filegroup(
 
 # MARK: Swiftgram alternative icons
 alternate_icon_folders = [
+    "WGObsidian",
+    "WGViolet",
+    "WGIce",
+    "WGEmber",
+    "WGStealth",
     "SGDefault",
     "SGBlack",
     "SGLegacy",

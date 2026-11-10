@@ -2047,6 +2047,11 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
         }
         
+        // MARK: Whygram
+        if WGSettings.shared.bool(.hideShareButton) {
+            needsShareButton = false
+        }
+
         if isPreview {
             needsShareButton = false
             needsSummarizeButton = false

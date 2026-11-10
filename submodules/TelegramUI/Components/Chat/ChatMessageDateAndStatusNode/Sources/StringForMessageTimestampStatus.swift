@@ -186,7 +186,8 @@ public func stringForMessageTimestampStatus(
     // MARK: Whygram
     for attribute in message.attributes {
         if let attribute = attribute as? WGMessageAttribute, attribute.deletedDate != nil {
-            dateText = "\(wgString("Message.Deleted", strings.baseLanguageCode)) \(dateText)"
+            let wgDeletedMark = WGSettings.shared.string(.deletedMark)
+            dateText = "\(wgDeletedMark.isEmpty ? wgString("Message.Deleted", strings.baseLanguageCode) : wgDeletedMark) \(dateText)"
             break
         }
     }

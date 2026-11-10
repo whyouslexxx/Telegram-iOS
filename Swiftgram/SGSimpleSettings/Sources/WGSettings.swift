@@ -26,6 +26,19 @@ public final class WGSettings {
         // Прочее
         case noAds
         case bypassCopyProtection
+        // Оформление
+        case translucentDeleted
+        case hideShareButton
+        case noBubbleTail
+    }
+
+    public enum StringKey: String, CaseIterable {
+        case deletedMark
+        case editedMark
+        case appFont
+        case fakePhone
+        case fakeUsername
+        case fakeStars
     }
 
     private static let enabledByDefault: Set<Key> = [
@@ -58,6 +71,7 @@ public final class WGSettings {
     private var matcherCache: [String: WGFilterMatcher] = [:]
     private var readExceptionsValue: Set<Int64> = []
     private var peerTitlesValue: [String: String] = [:]
+    private var stringValues: [StringKey: String] = [:]
     private var allowedReadPushes: [Int64: Double] = [:]
 
     private init() {
@@ -78,6 +92,9 @@ public final class WGSettings {
             self.readExceptionsValue = Set(stored.map { $0.int64Value })
         }
         self.peerTitlesValue = (self.defaults.dictionary(forKey: WGSettings.peerTitlesKey) as? [String: String]) ?? [:]
+        for key in StringKey.allCases {
+            self.stringValues[key] = self.defaults.string(forKey: WGSettings.prefix + key.rawValue) ?? ""
+        }
     }
 
     // MARK: Переключатели
@@ -116,6 +133,27 @@ public final class WGSettings {
     public var saveFromBots: Bool { return self.bool(.saveFromBots) }
     public var noAds: Bool { return self.bool(.noAds) }
     public var bypassCopyProtection: Bool { return self.bool(.bypassCopyProtection) }
+
+    // MARK: Строковые настройки
+
+    public func string(_ key: StringKey) -> String {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        return self.stringValues[key] ?? ""
+    }
+
+    public func setString(_ key: StringKey, _ value: String) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.lock.lock()
+        self.stringValues[key] = trimmed
+        self.lock.unlock()
+        self.defaults.set(trimmed, forKey: WGSettings.prefix + key.rawValue)
+    }
+
+    /// Выбран ли свой шрифт интерфейса.
+    public var hasCustomFont: Bool {
+        return !self.string(.appFont).isEmpty
+    }
 
     // MARK: Названия чатов
 

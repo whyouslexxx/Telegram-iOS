@@ -181,6 +181,8 @@ public func wgSettingsController(context: AccountContext) -> ViewController {
             pushImpl?(wgFiltersController(context: context))
         case "other":
             pushImpl?(wgOtherController(context: context))
+        case "appearance":
+            pushImpl?(wgAppearanceController(context: context))
         case "interface":
             pushImpl?(sgSettingsController(context: context))
         default:
@@ -199,7 +201,8 @@ public func wgSettingsController(context: AccountContext) -> ViewController {
         entries.append(.link(id: 1, section: 0, key: "ghost", title: wgString("Main.Ghost", lang), label: settings.bool(.ghostMode) ? on : off, icon: "WGGhost", color: 0x5E5CE6))
         entries.append(.link(id: 2, section: 0, key: "saving", title: wgString("Main.Saving", lang), label: (settings.saveDeleted || settings.saveEdits) ? on : off, icon: "WGSaving", color: 0x34C759))
         entries.append(.link(id: 3, section: 0, key: "filters", title: wgString("Main.Filters", lang), label: settings.bool(.filtersEnabled) && filtersCount != 0 ? "\(filtersCount)" : "", icon: "WGFilter", color: 0xFF9F0A))
-        entries.append(.link(id: 4, section: 0, key: "other", title: wgString("Main.Other", lang), label: "", icon: "WGShield", color: 0x0A84FF))
+        entries.append(.link(id: 4, section: 0, key: "appearance", title: wgString("Main.Appearance", lang), label: "", icon: "WGPalette", color: 0xFF375F))
+        entries.append(.link(id: 5, section: 0, key: "other", title: wgString("Main.Other", lang), label: "", icon: "WGShield", color: 0x0A84FF))
 
         entries.append(.header(id: 10, section: 1, text: wgString("Main.Interface.Header", lang)))
         entries.append(.link(id: 11, section: 1, key: "interface", title: wgString("Main.Interface", lang), label: "", icon: "WGInterface", color: 0x8E8E93))
@@ -328,6 +331,114 @@ private func wgOtherController(context: AccountContext) -> ViewController {
         entries.append(.notice(id: 12, section: 1, text: wgString("Other.CopyProtection.Notice", lang)))
         return entries
     })
+}
+
+// MARK: - Оформление
+
+private let wgFontOptions: [(value: String, title: String)] = [
+    ("", ""),
+    ("rounded", "SF Rounded"),
+    ("serif", "New York"),
+    ("mono", "SF Mono"),
+    ("Avenir Next", "Avenir Next"),
+    ("Helvetica Neue", "Helvetica Neue"),
+    ("Georgia", "Georgia"),
+    ("Verdana", "Verdana")
+]
+
+private func wgAppearanceController(context: AccountContext) -> ViewController {
+    let refresh = WGRefresh()
+    var presentImpl: ((ViewController, Any?) -> Void)?
+
+    let editString: (WGSettings.StringKey, String, Int) -> Void = { key, titleKey, limit in
+        let lang = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode
+        let prompt = promptController(context: context, text: wgString(titleKey, lang), value: WGSettings.shared.string(key), placeholder: wgString("Appearance.Mark.Placeholder", lang), characterLimit: limit, apply: { value in
+            WGSettings.shared.setString(key, value ?? "")
+            refresh.trigger()
+        })
+        presentImpl?(prompt, nil)
+    }
+
+    let arguments = WGArguments(setBool: { key, value in
+        wgSetBool(key, value)
+        refresh.trigger()
+    }, open: { key in
+        switch key {
+        case "deletedMark":
+            editString(.deletedMark, "Appearance.DeletedMark", 24)
+        case "editedMark":
+            editString(.editedMark, "Appearance.EditedMark", 24)
+        case "fakePhone":
+            editString(.fakePhone, "Appearance.FakePhone", 32)
+        case "fakeUsername":
+            editString(.fakeUsername, "Appearance.FakeUsername", 32)
+        case "fakeStars":
+            editString(.fakeStars, "Appearance.FakeStars", 12)
+        case "font":
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            let lang = presentationData.strings.baseLanguageCode
+            let actionSheet = ActionSheetController(presentationData: presentationData)
+            var items: [ActionSheetItem] = []
+            for option in wgFontOptions {
+                let title = option.value.isEmpty ? wgString("Appearance.Font.System", lang) : option.title
+                items.append(ActionSheetButtonItem(title: title, color: .accent, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                    WGSettings.shared.setString(.appFont, option.value)
+                    refresh.trigger()
+                }))
+            }
+            actionSheet.setItemGroups([
+                ActionSheetItemGroup(items: items),
+                ActionSheetItemGroup(items: [
+                    ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                    })
+                ])
+            ])
+            presentImpl?(actionSheet, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+        default:
+            break
+        }
+    })
+
+    let controller = wgListController(context: context, title: { wgString("Main.Appearance", $0) }, refresh: refresh, arguments: arguments, entries: { presentationData in
+        let lang = presentationData.strings.baseLanguageCode
+        let settings = WGSettings.shared
+        let defaultLabel = wgString("Appearance.Default", lang)
+        let realLabel = wgString("Appearance.Fake.Real", lang)
+        let value: (WGSettings.StringKey, String) -> String = { key, fallback in
+            let current = settings.string(key)
+            return current.isEmpty ? fallback : current
+        }
+        let fontValue = settings.string(.appFont)
+        let fontTitle = wgFontOptions.first(where: { $0.value == fontValue && !fontValue.isEmpty })?.title ?? wgString("Appearance.Font.System", lang)
+
+        var entries: [WGEntry] = []
+        entries.append(.header(id: 1, section: 0, text: wgString("Appearance.Messages.Header", lang)))
+        entries.append(.link(id: 2, section: 0, key: "deletedMark", title: wgString("Appearance.DeletedMark", lang), label: value(.deletedMark, wgString("Message.Deleted", lang)), icon: nil, color: 0))
+        entries.append(.link(id: 3, section: 0, key: "editedMark", title: wgString("Appearance.EditedMark", lang), label: value(.editedMark, defaultLabel), icon: nil, color: 0))
+        entries.append(.notice(id: 4, section: 0, text: wgString("Appearance.Mark.Notice", lang)))
+
+        entries.append(wgToggle(10, 1, .translucentDeleted, "Appearance.TranslucentDeleted", lang))
+        entries.append(wgToggle(11, 1, .noBubbleTail, "Appearance.NoTail", lang))
+        entries.append(wgToggle(12, 1, .hideShareButton, "Appearance.HideShare", lang))
+        entries.append(.notice(id: 13, section: 1, text: wgString("Appearance.Messages.Notice", lang)))
+
+        entries.append(.header(id: 20, section: 2, text: wgString("Appearance.Font.Header", lang)))
+        entries.append(.link(id: 21, section: 2, key: "font", title: wgString("Appearance.Font", lang), label: fontTitle, icon: nil, color: 0))
+        entries.append(.notice(id: 22, section: 2, text: wgString("Appearance.Font.Notice", lang) + "\n\n" + wgString("Appearance.Icon.Notice", lang)))
+
+        entries.append(.header(id: 30, section: 3, text: wgString("Appearance.Fake.Header", lang)))
+        entries.append(.link(id: 31, section: 3, key: "fakePhone", title: wgString("Appearance.FakePhone", lang), label: value(.fakePhone, realLabel), icon: nil, color: 0))
+        entries.append(.link(id: 32, section: 3, key: "fakeUsername", title: wgString("Appearance.FakeUsername", lang), label: value(.fakeUsername, realLabel), icon: nil, color: 0))
+        entries.append(.link(id: 33, section: 3, key: "fakeStars", title: wgString("Appearance.FakeStars", lang), label: value(.fakeStars, realLabel), icon: nil, color: 0))
+        entries.append(.notice(id: 34, section: 3, text: wgString("Appearance.Fake.Notice", lang)))
+        return entries
+    })
+    presentImpl = { [weak controller] c, a in
+        controller?.present(c, in: .window(.root), with: a)
+    }
+    return controller
 }
 
 // MARK: - Фильтры

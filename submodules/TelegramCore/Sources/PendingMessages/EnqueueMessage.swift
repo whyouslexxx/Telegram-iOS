@@ -915,7 +915,7 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
     
     var updatedMessages: [(Bool, EnqueueMessage)] = []
     outer: for (transformedMedia, message) in messages {
-        var updatedMessage = message
+        var updatedMessage = wgQuoteReplyToDeletedMessage(transaction: transaction, peerId: peerId, message: message) // MARK: Whygram
         if transformGroupingKeysWithPeerId {
             updatedMessage = updatedMessage.withUpdatedGroupingKey { groupingKey -> Int64? in
                 if let groupingKey = groupingKey {

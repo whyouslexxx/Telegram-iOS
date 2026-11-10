@@ -408,6 +408,22 @@ class ThemeSettingsAppIconItemNode: ListViewItemNode, ItemListItemNode {
                                 case "SGNeon":
                                     name = "Neon"
                                     bordered = false
+                                // MARK: Whygram
+                                case "WGObsidian":
+                                    name = "Obsidian"
+                                    bordered = false
+                                case "WGViolet":
+                                    name = "Violet"
+                                    bordered = false
+                                case "WGIce":
+                                    name = "Ice"
+                                    bordered = false
+                                case "WGEmber":
+                                    name = "Ember"
+                                    bordered = false
+                                case "WGStealth":
+                                    name = "Stealth"
+                                    bordered = false
                                 case "SGNeonBlue":
                                     name = "Neon Blue"
                                     bordered = false

@@ -708,6 +708,12 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
             }
         }
         self.wasFilteredKeywordTested = true
+        // MARK: Whygram
+        if WGSettings.shared.bool(.translucentDeleted) && item.message.wgIsDeleted {
+            self.alpha = 0.5
+        } else if self.alpha == 0.5 {
+            self.alpha = 1.0
+        }
     }
     
     open func updateAccessibilityData(_ accessibilityData: ChatMessageAccessibilityData) {

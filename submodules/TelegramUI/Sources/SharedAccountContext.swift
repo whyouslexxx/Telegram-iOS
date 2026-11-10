@@ -3,6 +3,7 @@ import SGIAP
 import SGPayWall
 import SGProUI
 import SGSimpleSettings
+import SGAppGroupIdentifier
 //
 import Foundation
 import UIKit
@@ -363,12 +364,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             guard let data else {
                 return nil
             }
-            let sandbox: Bool
-            #if DEBUG
-            sandbox = true
-            #else
-            sandbox = false
-            #endif
+            let sandbox = sgPushNotificationsUseSandbox()
             return AuthorizationCodePushNotificationConfiguration(
                 token: hexString(data),
                 isSandbox: sandbox
@@ -1684,12 +1680,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
     
     public func updateNotificationTokensRegistration() {
-        let sandbox: Bool
-        #if DEBUG
-        sandbox = true
-        #else
-        sandbox = false
-        #endif
+        let sandbox = sgPushNotificationsUseSandbox()
         
         let settings = self.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.inAppNotificationSettings])
         |> map { sharedData -> (allAccounts: Bool, includeMuted: Bool) in

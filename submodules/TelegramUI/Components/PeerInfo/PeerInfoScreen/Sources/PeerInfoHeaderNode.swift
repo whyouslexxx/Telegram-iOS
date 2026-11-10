@@ -1279,10 +1279,16 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 if !formattedPhone.isEmpty && SGSimpleSettings.shared.hidePhoneInSettings {
                     formattedPhone = ""
                 }
+                // MARK: Whygram
+                let wgFakePhone = WGSettings.shared.string(.fakePhone)
+                if !wgFakePhone.isEmpty {
+                    formattedPhone = wgFakePhone
+                }
+                let wgFakeUsername = WGSettings.shared.string(.fakeUsername).replacingOccurrences(of: "@", with: "")
 
                 var subtitle = formattedPhone
 
-                if let mainUsername = user.addressName, !mainUsername.isEmpty {
+                if let mainUsername = wgFakeUsername.isEmpty ? user.addressName : wgFakeUsername, !mainUsername.isEmpty {
                     if !subtitle.isEmpty {
                         subtitle = "\(subtitle) • @\(mainUsername)"
                     } else {

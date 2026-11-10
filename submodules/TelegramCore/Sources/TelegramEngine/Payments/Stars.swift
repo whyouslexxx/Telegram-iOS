@@ -5,6 +5,7 @@ import SwiftSignalKit
 internal import TelegramApi
 import FlatBuffers
 import FlatSerialization
+import SGSimpleSettings // MARK: Whygram
 
 public struct StarsTopUpOption: Equatable, Codable {
     enum CodingKeys: String, CodingKey {
@@ -642,6 +643,11 @@ private final class StarsContextImpl {
     }
     
     private func updateState(_ state: StarsContext.State) {
+        // MARK: Whygram
+        var state = state
+        if !self.ton, let wgFakeBalance = Int64(WGSettings.shared.string(.fakeStars)), wgFakeBalance >= 0 {
+            state.balance = StarsAmount(value: wgFakeBalance, nanos: 0)
+        }
         self._state = state
         self._statePromise.set(.single(state))
     }

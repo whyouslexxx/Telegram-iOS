@@ -11,6 +11,7 @@ import SGAPIWebSettings
 import SGLogging
 import SGStrings
 import SGSimpleSettings
+import SGAppGroupIdentifier
 //
 import UIKit
 import SwiftSignalKit
@@ -629,11 +630,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             },
             appData: self.regularDeviceToken.get() |> map { token in
                 let tokenEnvironment: String
-                #if DEBUG
-                tokenEnvironment = "sandbox"
-                #else
-                tokenEnvironment = "production"
-                #endif
+                tokenEnvironment = sgPushNotificationsUseSandbox() ? "sandbox" : "production"
                 
                 let data = buildConfig.bundleData(withAppToken: token, tokenType: "apns", tokenEnvironment: tokenEnvironment, signatureDict: signatureDict)
                 if let data = data, let _ = String(data: data, encoding: .utf8) {
@@ -1053,6 +1050,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 // MARK: Swiftgram
                 icons = [
                     PresentationAppIcon(name: "SGDefault", imageName: "SGDefault", isDefault: true),
+                    // MARK: Whygram
+                    PresentationAppIcon(name: "WGObsidian", imageName: "WGObsidian"),
+                    PresentationAppIcon(name: "WGViolet", imageName: "WGViolet"),
+                    PresentationAppIcon(name: "WGIce", imageName: "WGIce"),
+                    PresentationAppIcon(name: "WGEmber", imageName: "WGEmber"),
+                    PresentationAppIcon(name: "WGStealth", imageName: "WGStealth"),
                     PresentationAppIcon(name: "SGBlack", imageName: "SGBlack"),
                     PresentationAppIcon(name: "SGLegacy", imageName: "SGLegacy"),
                     PresentationAppIcon(name: "SGInverted", imageName: "SGInverted"),

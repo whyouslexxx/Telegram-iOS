@@ -91,6 +91,55 @@ func wgMarkRemotelyDeletedMessages(transaction: Transaction, ids: [MessageId]) -
     return idsToDelete
 }
 
+/// Ответ на сообщение, которое собеседник уже удалил: на сервере его нет, поэтому ответ
+/// отправляется обычным сообщением с цитатой удалённого текста. В группах перед цитатой
+/// ставится автор: «@alex: привет».
+func wgQuoteReplyToDeletedMessage(transaction: Transaction, peerId: PeerId, message: EnqueueMessage) -> EnqueueMessage {
+    guard case let .message(text, attributes, inlineStickers, mediaReference, threadId: threadId, replyToMessageId, replyToStoryId, localGroupingKey, correlationId, bubbleUpEmojiOrStickersets) = message else {
+        return message
+    }
+    guard let replySubject = replyToMessageId, let repliedMessage = transaction.getMessage(replySubject.messageId), repliedMessage.wgIsDeleted else {
+        return message
+    }
+
+    var quotedText = replySubject.quote?.text ?? repliedMessage.text
+    quotedText = quotedText.trimmingCharacters(in: .whitespacesAndNewlines)
+    if quotedText.count > 200 {
+        quotedText = String(quotedText.prefix(200)) + "…"
+    }
+    // Стикер или медиа без подписи цитату нести не могут: отправляем без ответа.
+    if quotedText.isEmpty || (mediaReference != nil && text.isEmpty) {
+        return .message(text: text, attributes: attributes, inlineStickers: inlineStickers, mediaReference: mediaReference, threadId: threadId, replyToMessageId: nil, replyToStoryId: replyToStoryId, localGroupingKey: localGroupingKey, correlationId: correlationId, bubbleUpEmojiOrStickersets: bubbleUpEmojiOrStickersets)
+    }
+
+    var prefix = ""
+    if peerId.namespace != Namespaces.Peer.CloudUser, let author = repliedMessage.author {
+        if let username = author.addressName, !username.isEmpty {
+            prefix = "@\(username): "
+        } else {
+            prefix = "\(author.debugDisplayTitle): "
+        }
+    }
+    let quote = prefix + quotedText
+    let quoteLength = (quote as NSString).length
+    let shift = quoteLength + 1
+
+    var updatedAttributes: [MessageAttribute] = []
+    var entities: [MessageTextEntity] = [MessageTextEntity(range: 0 ..< quoteLength, type: .BlockQuote(isCollapsed: false))]
+    for attribute in attributes {
+        if let attribute = attribute as? TextEntitiesMessageAttribute {
+            for entity in attribute.entities {
+                entities.append(MessageTextEntity(range: (entity.range.lowerBound + shift) ..< (entity.range.upperBound + shift), type: entity.type))
+            }
+        } else {
+            updatedAttributes.append(attribute)
+        }
+    }
+    updatedAttributes.append(TextEntitiesMessageAttribute(entities: entities))
+
+    return .message(text: quote + "\n" + text, attributes: updatedAttributes, inlineStickers: inlineStickers, mediaReference: mediaReference, threadId: threadId, replyToMessageId: nil, replyToStoryId: replyToStoryId, localGroupingKey: localGroupingKey, correlationId: correlationId, bubbleUpEmojiOrStickersets: bubbleUpEmojiOrStickersets)
+}
+
 /// Отправка через отложенные сообщения: сервер сам отправит сообщение через несколько секунд,
 /// и аккаунт не появится в сети.
 func wgPreparedOutgoingMessages(accountPeerId: PeerId, peerId: PeerId, messages: [EnqueueMessage]) -> [EnqueueMessage] {

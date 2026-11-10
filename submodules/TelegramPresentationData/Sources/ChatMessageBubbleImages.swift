@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Display
 import TelegramCore
+import SGSimpleSettings // MARK: Whygram
 
 public enum MessageBubbleImageNeighbors {
     case none
@@ -130,6 +131,11 @@ public func messageBubbleArguments(maxCornerRadius: CGFloat, minCornerRadius: CG
         drawTail = false
     }
     
+    // MARK: Whygram
+    if WGSettings.shared.bool(.noBubbleTail) {
+        drawTail = false
+    }
+
     if incoming {
         var tmp = topRightRadius
         topRightRadius = topLeftRadius
