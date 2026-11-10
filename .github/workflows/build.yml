@@ -82,6 +82,8 @@ jobs:
           api_hash = os.environ.get('TG_API_HASH', '').strip()
           if not api_id.isdecimal() or int(api_id) <= 0:
               raise SystemExit('Set the TG_API_ID repository Actions secret to your my.telegram.org api_id')
+          if int(api_id) == 8:
+              raise SystemExit('TG_API_ID must be your own API ID, not the official Telegram test ID')
           if len(api_hash) != 32 or any(c not in '0123456789abcdefABCDEF' for c in api_hash):
               raise SystemExit('Set the TG_API_HASH repository Actions secret to your my.telegram.org api_hash')
           src = 'build-system/appstore-configuration.json'
