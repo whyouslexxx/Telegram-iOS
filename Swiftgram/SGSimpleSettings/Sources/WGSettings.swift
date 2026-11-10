@@ -46,6 +46,7 @@ public final class WGSettings {
     private static let chatFiltersKey = "wg_chatFilters"
     private static let blockedPeerIdsKey = "wg_blockedPeerIds"
     private static let readExceptionsKey = "wg_readExceptions"
+    private static let peerTitlesKey = "wg_peerTitles"
 
     private let defaults = UserDefaults.standard
     private let lock = NSLock()
@@ -56,6 +57,7 @@ public final class WGSettings {
     private var blockedPeerIdsValue: Set<Int64> = []
     private var matcherCache: [String: WGFilterMatcher] = [:]
     private var readExceptionsValue: Set<Int64> = []
+    private var peerTitlesValue: [String: String] = [:]
     private var allowedReadPushes: [Int64: Double] = [:]
 
     private init() {
@@ -75,6 +77,7 @@ public final class WGSettings {
         if let stored = self.defaults.array(forKey: WGSettings.readExceptionsKey) as? [NSNumber] {
             self.readExceptionsValue = Set(stored.map { $0.int64Value })
         }
+        self.peerTitlesValue = (self.defaults.dictionary(forKey: WGSettings.peerTitlesKey) as? [String: String]) ?? [:]
     }
 
     // MARK: Переключатели
@@ -113,6 +116,26 @@ public final class WGSettings {
     public var saveFromBots: Bool { return self.bool(.saveFromBots) }
     public var noAds: Bool { return self.bool(.noAds) }
     public var bypassCopyProtection: Bool { return self.bool(.bypassCopyProtection) }
+
+    // MARK: Названия чатов
+
+    /// Название чата для списков в настройках (фильтры чата, исключения).
+    public func peerTitle(_ peerId: Int64) -> String {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        return self.peerTitlesValue["\(peerId)"] ?? "\(peerId)"
+    }
+
+    public func rememberPeerTitle(_ peerId: Int64, title: String) {
+        if title.isEmpty {
+            return
+        }
+        self.lock.lock()
+        self.peerTitlesValue["\(peerId)"] = title
+        let snapshot = self.peerTitlesValue
+        self.lock.unlock()
+        self.defaults.set(snapshot, forKey: WGSettings.peerTitlesKey)
+    }
 
     // MARK: Отметки о прочтении
 

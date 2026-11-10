@@ -39,17 +39,19 @@ func wgAppendContextMenuActions(actions: inout [ContextMenuItem], sgActions: ino
         actions.append(.action(ContextMenuActionItem(text: wgString("ContextMenu.EditHistory", lang), icon: { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "WGHistory"), color: theme.actionSheet.primaryTextColor)
         }, action: { _, f in
-            controllerInteraction.navigationController()?.pushViewController(wgEditHistoryController(context: context, message: message))
+            controllerInteraction.navigationController()?.pushViewController(wgEditHistoryController(context: context, currentText: message.text, edits: attribute.edits))
             f(.default)
         })))
     }
 
     let chatPeerId = message.id.peerId.toInt64()
+    let chatTitle = message.peers[message.id.peerId]?.debugDisplayTitle ?? ""
     if WGSettings.shared.ghostNoRead && message.id.peerId != context.account.peerId {
         let isException = WGSettings.shared.isReadException(chatPeerId)
         sgActions.append(.action(ContextMenuActionItem(text: wgString(isException ? "ContextMenu.ReadException.Remove" : "ContextMenu.ReadException.Add", lang), icon: { theme in
             return generateTintedImage(image: UIImage(bundleImageName: isException ? "WGEyeOff" : "WGGhost"), color: theme.actionSheet.primaryTextColor)
         }, action: { _, f in
+            WGSettings.shared.rememberPeerTitle(chatPeerId, title: chatTitle)
             WGSettings.shared.setReadException(chatPeerId, !isException)
             f(.default)
         })))
@@ -60,7 +62,8 @@ func wgAppendContextMenuActions(actions: inout [ContextMenuItem], sgActions: ino
             return generateTintedImage(image: UIImage(bundleImageName: "WGFilterAdd"), color: theme.actionSheet.primaryTextColor)
         }, action: { _, f in
             f(.default)
-            wgPresentAddFilter(context: context, peerId: message.id.peerId, text: message.text, present: { controller, arguments in
+            WGSettings.shared.rememberPeerTitle(chatPeerId, title: chatTitle)
+            wgPresentAddFilter(context: context, peerId: chatPeerId, text: message.text, present: { controller, arguments in
                 controllerInteraction.presentController(controller, arguments)
             })
         })))

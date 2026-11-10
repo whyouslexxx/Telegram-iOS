@@ -3,7 +3,6 @@ import Foundation
 import UIKit
 import Display
 import SwiftSignalKit
-import Postbox
 import TelegramCore
 import TelegramPresentationData
 import TelegramStringFormatting
@@ -217,7 +216,6 @@ public func wgSettingsController(context: AccountContext) -> ViewController {
 
 private func wgGhostController(context: AccountContext) -> ViewController {
     let refresh = WGRefresh()
-    let chatTitles = Atomic<[Int64: String]>(value: [:])
     var presentImpl: ((ViewController, Any?) -> Void)?
 
     let arguments = WGArguments(setBool: { key, value in
@@ -246,28 +244,10 @@ private func wgGhostController(context: AccountContext) -> ViewController {
         presentImpl?(actionSheet, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
     })
 
-    let exceptionIds = WGSettings.shared.readExceptions
-    if !exceptionIds.isEmpty {
-        let _ = (context.account.postbox.transaction { transaction -> [Int64: String] in
-            var result: [Int64: String] = [:]
-            for peerId in exceptionIds {
-                if let peer = transaction.getPeer(PeerId(peerId)) {
-                    result[peerId] = peer.debugDisplayTitle
-                }
-            }
-            return result
-        }
-        |> deliverOnMainQueue).start(next: { titles in
-            let _ = chatTitles.swap(titles)
-            refresh.trigger()
-        })
-    }
-
     let controller = wgListController(context: context, title: { wgString("Main.Ghost", $0) }, refresh: refresh, arguments: arguments, entries: { presentationData in
         let lang = presentationData.strings.baseLanguageCode
         let settings = WGSettings.shared
         let master = settings.bool(.ghostMode)
-        let titles = chatTitles.with { $0 }
 
         var entries: [WGEntry] = []
         entries.append(wgToggle(1, 0, .ghostMode, "Ghost.Enable", lang))
@@ -291,7 +271,7 @@ private func wgGhostController(context: AccountContext) -> ViewController {
         entries.append(.header(id: 40, section: 4, text: wgString("Ghost.Exceptions.Header", lang)))
         var nextId = 41
         for peerId in settings.readExceptions {
-            entries.append(.text(id: nextId, section: 4, key: "e:\(peerId)", text: titles[peerId] ?? "\(peerId)"))
+            entries.append(.text(id: nextId, section: 4, key: "e:\(peerId)", text: settings.peerTitle(peerId)))
             nextId += 1
         }
         entries.append(.notice(id: 4000, section: 4, text: wgString("Ghost.Exceptions.Notice", lang)))
@@ -380,28 +360,7 @@ private final class WGBlockedLoader {
 private func wgFiltersController(context: AccountContext) -> ViewController {
     let refresh = WGRefresh()
     let blockedLoader = WGBlockedLoader()
-    let chatTitles = Atomic<[Int64: String]>(value: [:])
     var presentImpl: ((ViewController, Any?) -> Void)?
-
-    let reloadChatTitles: () -> Void = {
-        let peerIds = Array(WGSettings.shared.chatFilters.keys)
-        if peerIds.isEmpty {
-            return
-        }
-        let _ = (context.account.postbox.transaction { transaction -> [Int64: String] in
-            var result: [Int64: String] = [:]
-            for peerId in peerIds {
-                if let peer = transaction.getPeer(PeerId(peerId)) {
-                    result[peerId] = peer.debugDisplayTitle
-                }
-            }
-            return result
-        }
-        |> deliverOnMainQueue).start(next: { titles in
-            let _ = chatTitles.swap(titles)
-            refresh.trigger()
-        })
-    }
 
     let confirmDelete: (@escaping () -> Void) -> Void = { remove in
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
@@ -470,7 +429,6 @@ private func wgFiltersController(context: AccountContext) -> ViewController {
     let controller = wgListController(context: context, title: { wgString("Main.Filters", $0) }, refresh: refresh, arguments: arguments, entries: { presentationData in
         let lang = presentationData.strings.baseLanguageCode
         let settings = WGSettings.shared
-        let titles = chatTitles.with { $0 }
 
         var entries: [WGEntry] = []
         entries.append(wgToggle(1, 0, .filtersEnabled, "Filters.Enable", lang))
@@ -488,7 +446,7 @@ private func wgFiltersController(context: AccountContext) -> ViewController {
             entries.append(.header(id: 6000, section: 2, text: wgString("Filters.Chats.Header", lang)))
             var nextId = 6001
             for peerId in chatFilters.keys.sorted() {
-                let title = titles[peerId] ?? "\(peerId)"
+                let title = settings.peerTitle(peerId)
                 for (index, filter) in (chatFilters[peerId] ?? []).enumerated() {
                     entries.append(.text(id: nextId, section: 2, key: "c:\(peerId):\(index)", text: "\(title): \(filter)"))
                     nextId += 1
@@ -503,7 +461,6 @@ private func wgFiltersController(context: AccountContext) -> ViewController {
     presentImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
     }
-    reloadChatTitles()
     if WGSettings.shared.hideBlocked {
         blockedLoader.load(account: context.account, updated: {
             refresh.trigger()
@@ -514,7 +471,7 @@ private func wgFiltersController(context: AccountContext) -> ViewController {
 
 // MARK: - Добавление фильтра из сообщения
 
-public func wgPresentAddFilter(context: AccountContext, peerId: PeerId, text: String, present: @escaping (ViewController, Any?) -> Void) {
+public func wgPresentAddFilter(context: AccountContext, peerId: Int64, text: String, present: @escaping (ViewController, Any?) -> Void) {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     let lang = presentationData.strings.baseLanguageCode
 
@@ -529,7 +486,7 @@ public func wgPresentAddFilter(context: AccountContext, peerId: PeerId, text: St
                 return
             }
             if onlyThisChat {
-                WGSettings.shared.addChatFilter(value, peerId: peerId.toInt64())
+                WGSettings.shared.addChatFilter(value, peerId: peerId)
             } else {
                 WGSettings.shared.addGlobalFilter(value)
             }
@@ -563,10 +520,8 @@ public func wgPresentAddFilter(context: AccountContext, peerId: PeerId, text: St
 
 // MARK: - История правок
 
-public func wgEditHistoryController(context: AccountContext, message: Message) -> ViewController {
+public func wgEditHistoryController(context: AccountContext, currentText: String, edits: [WGMessageAttribute.Edit]) -> ViewController {
     let refresh = WGRefresh()
-    let edits = message.wgAttribute?.edits ?? []
-    let currentText = message.text
 
     return wgListController(context: context, title: { wgString("EditHistory.Title", $0) }, refresh: refresh, arguments: WGArguments(), entries: { presentationData in
         let lang = presentationData.strings.baseLanguageCode

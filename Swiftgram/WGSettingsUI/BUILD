@@ -19,7 +19,6 @@ swift_library(
         "//Swiftgram/SGSettingsUI:SGSettingsUI",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/Display:Display",
-        "//submodules/Postbox:Postbox",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//submodules/TelegramStringFormatting:TelegramStringFormatting",
