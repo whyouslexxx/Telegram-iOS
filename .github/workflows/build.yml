@@ -68,7 +68,7 @@ jobs:
 
       - name: Generate build configuration
         # api_id / api_hash берутся из секретов репозитория (Settings → Secrets → Actions).
-        # Без секретов используются публичные тестовые значения из appstore-configuration.json.
+        # Never silently ship the official client's public API credentials.
         env:
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
@@ -78,14 +78,22 @@ jobs:
           cd /Users/Shared/telegram-ios
           python3 - <<'EOF'
           import json, os
+          api_id = os.environ.get('TG_API_ID', '').strip()
+          api_hash = os.environ.get('TG_API_HASH', '').strip()
+          if not api_id.isdecimal() or int(api_id) <= 0:
+              raise SystemExit('Set the TG_API_ID repository Actions secret to your my.telegram.org api_id')
+          if len(api_hash) != 32 or any(c not in '0123456789abcdefABCDEF' for c in api_hash):
+              raise SystemExit('Set the TG_API_HASH repository Actions secret to your my.telegram.org api_hash')
           src = 'build-system/appstore-configuration.json'
           cfg = json.load(open(src))
           cfg.setdefault('sg_config', '{}')
           # Re-signed builds cannot use Telegram's CloudKit container. Calling
           # CKContainer.default() without its entitlements aborts during startup.
           cfg['enable_icloud'] = False
-          for key, env in [('api_id', 'TG_API_ID'), ('api_hash', 'TG_API_HASH'),
-                           ('bundle_id', 'TG_BUNDLE_ID'), ('team_id', 'TG_TEAM_ID')]:
+          cfg['api_id'] = api_id
+          cfg['api_hash'] = api_hash
+          print('Telegram API credentials: validated repository secrets')
+          for key, env in [('bundle_id', 'TG_BUNDLE_ID'), ('team_id', 'TG_TEAM_ID')]:
               if os.environ.get(env):
                   cfg[key] = os.environ[env]
                   print(f'{key}: from {env}')
