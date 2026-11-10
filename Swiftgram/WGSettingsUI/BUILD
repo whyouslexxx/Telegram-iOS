@@ -15,6 +15,7 @@ swift_library(
         "Sources/**/*.swift",
     ]),
     deps = [
+        "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier",
         "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
         "//Swiftgram/SGSettingsUI:SGSettingsUI",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",

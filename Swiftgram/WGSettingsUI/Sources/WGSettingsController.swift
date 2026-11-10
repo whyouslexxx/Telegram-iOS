@@ -1,6 +1,8 @@
 // MARK: Whygram
 import Foundation
 import UIKit
+import UserNotifications
+import SGAppGroupIdentifier
 import Display
 import SwiftSignalKit
 import TelegramCore
@@ -185,6 +187,8 @@ public func wgSettingsController(context: AccountContext) -> ViewController {
             pushImpl?(wgAppearanceController(context: context))
         case "interface":
             pushImpl?(sgSettingsController(context: context))
+        case "pushDiagnostics":
+            pushImpl?(wgPushDiagnosticsController(context: context))
         default:
             break
         }
@@ -207,11 +211,72 @@ public func wgSettingsController(context: AccountContext) -> ViewController {
         entries.append(.header(id: 10, section: 1, text: wgString("Main.Interface.Header", lang)))
         entries.append(.link(id: 11, section: 1, key: "interface", title: wgString("Main.Interface", lang), label: "", icon: "WGInterface", color: 0x8E8E93))
         entries.append(.notice(id: 12, section: 1, text: wgString("Main.Notice", lang)))
+        entries.append(.link(id: 20, section: 2, key: "pushDiagnostics", title: "Диагностика уведомлений", label: "", icon: "WGInterface", color: 0x0A84FF))
         return entries
     })
     pushImpl = { [weak controller] c in
         (controller?.navigationController as? NavigationController)?.pushViewController(c)
     }
+    return controller
+}
+
+private func wgPushDiagnosticsController(context: AccountContext) -> ViewController {
+    let refresh = WGRefresh()
+    var systemStatus = "Проверка разрешений…"
+    var refreshImpl: (() -> Void)?
+    let arguments = WGArguments(open: { key in
+        if key == "refresh" {
+            refreshImpl?()
+        } else if key == "register" {
+            WGPushDiagnostics.record("apns", status: "Запрошена повторная регистрация")
+            UIApplication.shared.registerForRemoteNotifications()
+            context.sharedContext.updateNotificationTokensRegistration()
+            refreshImpl?()
+        } else if key == "localTest" {
+            let content = UNMutableNotificationContent()
+            content.title = "Whygram"
+            content.body = "Локальные уведомления работают. Это проверка показа, а не доставки APNs."
+            content.sound = .default
+            let request = UNNotificationRequest(identifier: "whygram.push.local-test", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false))
+            UNUserNotificationCenter.current().add(request) { error in
+                WGPushDiagnostics.record("local-test", status: error.map { "Ошибка: \($0.localizedDescription)" } ?? "Локальное уведомление запланировано")
+                DispatchQueue.main.async { refresh.trigger() }
+            }
+        }
+    })
+    refreshImpl = {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            let enabled: (UNNotificationSetting) -> String = { $0 == .enabled ? "включено" : "выключено" }
+            let report = "Разрешение: \(settings.authorizationStatus.rawValue)\nБаннеры: \(enabled(settings.alertSetting))\nЗвук: \(enabled(settings.soundSetting))\nЭкран блокировки: \(enabled(settings.lockScreenSetting))\nЦентр уведомлений: \(enabled(settings.notificationCenterSetting))\nЗначки: \(enabled(settings.badgeSetting))"
+            DispatchQueue.main.async {
+                systemStatus = report
+                refresh.trigger()
+            }
+        }
+    }
+    let controller = wgListController(context: context, title: { _ in "Уведомления" }, refresh: refresh, arguments: arguments, entries: { _ in
+        let shared = sgAppGroupBaseURL()
+        let storage = shared == nil ? "Общая папка недоступна" : "Общая папка доступна"
+        let keyExists = shared.map { FileManager.default.fileExists(atPath: $0.appendingPathComponent("telegram-data/.tempkey").path) } ?? false
+        let timestamp = UserDefaults(suiteName: sgAppGroupIdentifier())?.double(forKey: "wg.push.receipt.\(sgBaseBundleIdentifier())") ?? 0
+        let receipt = timestamp == 0 ? "Push ещё не зафиксирован расширением" : DateFormatter.localizedString(from: Date(timeIntervalSince1970: timestamp), dateStyle: .short, timeStyle: .medium)
+        return [
+            .header(id: 1, section: 0, text: "Разрешения iOS"),
+            .text(id: 2, section: 0, key: "permissions", text: systemStatus),
+            .header(id: 10, section: 1, text: "Регистрация push"),
+            .text(id: 11, section: 1, key: "apns", text: "APNs:\n\(WGPushDiagnostics.status("apns"))"),
+            .text(id: 12, section: 1, key: "telegram", text: "Telegram:\n\(WGPushDiagnostics.status("telegram.1.\(context.account.peerId.toInt64())"))"),
+            .text(id: 13, section: 1, key: "environment", text: "Среда APNs: \(sgPushNotificationsUseSandbox() ? "sandbox" : "production")"),
+            .text(id: 14, section: 1, key: "storage", text: "\(storage)\nКлюч базы: \(keyExists ? "есть" : "нет")\nПоследний запуск расширения:\n\(receipt)"),
+            .header(id: 20, section: 2, text: "Проверка"),
+            .action(id: 21, section: 2, key: "refresh", title: "Обновить результаты", destructive: false),
+            .action(id: 22, section: 2, key: "register", title: "Повторить регистрацию push", destructive: false),
+            .action(id: 23, section: 2, key: "localTest", title: "Тестовый баннер через 5 секунд", destructive: false),
+            .text(id: 24, section: 2, key: "test", text: WGPushDiagnostics.status("local-test")),
+            .notice(id: 25, section: 2, text: "Для теста сверни приложение. Затем вернись и обнови результаты. Локальный тест проверяет показ уведомлений без участия Telegram и APNs. Токены и содержимое сообщений здесь не сохраняются.")
+        ]
+    })
+    controller.didAppear = { _ in refreshImpl?() }
     return controller
 }
 

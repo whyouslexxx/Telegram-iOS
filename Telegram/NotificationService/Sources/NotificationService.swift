@@ -2849,6 +2849,8 @@ final class NotificationService: UNNotificationServiceExtension {
     //
     
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
+        // Evidence that iOS actually launched the extension, without storing payloads.
+        UserDefaults(suiteName: sgAppGroupIdentifier())?.set(Date().timeIntervalSince1970, forKey: "wg.push.receipt.\(sgBaseBundleIdentifier())")
         let episode = String(UInt32.random(in: 0 ..< UInt32.max), radix: 16)
         self.episode = episode
         
